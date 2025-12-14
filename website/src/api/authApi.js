@@ -1,8 +1,9 @@
 import toast from "react-hot-toast";
 import { showToast } from "../components/Toast";
+import API_BASE_URL2 from "./apiConfig";
 
 const API_BASE =
-  import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  API_BASE_URL2 || 'http://localhost:5000';
 
 export async function login(email, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {
