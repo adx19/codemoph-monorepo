@@ -1,6 +1,5 @@
 import { showToast } from "../components/Toast";
-import { API_BASE_URL } from "../api/apiConfig";
-
+import API_BASE_URL from "../api/apiConfig";
 ;
 
 /**
