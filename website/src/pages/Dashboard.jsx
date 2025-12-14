@@ -37,16 +37,33 @@ const Dashboard = () => {
 
   // ✅ useMemo MUST be called every render
   const computedDaysLeft = React.useMemo(() => {
-    if (!subscriptionEndsAt) return "—";
+    const now = new Date();
 
-    const diff = Math.ceil(
-      (new Date(subscriptionEndsAt).getTime() - Date.now()) /
-        (1000 * 60 * 60 * 24)
+    // 🟢 PAID users → use subscription end date
+    if (subscriptionEndsAt) {
+      const end = new Date(subscriptionEndsAt);
+      const diff = Math.ceil(
+        (end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      return diff > 0 ? diff : "Expired";
+    }
+
+    // 🔵 FREE users → end of current month
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59
     );
 
-    if (diff <= 0) return "Expired";
+    const diff = Math.ceil(
+      (endOfMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
     return diff;
-  }, [plan, subscriptionEndsAt]);
+  }, [subscriptionEndsAt]);
 
   if (isLoading || summary) {
     return (
@@ -60,15 +77,16 @@ const Dashboard = () => {
             <h1 className="mt-2 text-3xl font-bold tracking-tight">
               Welcome back, {firstName}.
             </h1>
-            
+
             <p className="mt-1 text-sm text-zinc-400">
               Manage your CodeMorph credits and activity.
             </p>
-            <p className="mt-1 text-sm text-zinc-400">*In case request fails, try signing in again</p>
+            <p className="mt-1 text-sm text-zinc-400">
+              *In case request fails, try signing in again
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            
             <button
               onClick={() => {
                 const token = localStorage.getItem("token");
@@ -126,11 +144,7 @@ const Dashboard = () => {
               <Stat label="Used Today" value={usedToday} />
               <Stat label="Shared Out" value={sharedOut} />
               <Stat label="Received" value={received} />
-              <Stat
-                label="Days Left"
-                value={typeof daysLeft === "number" ? daysLeft : daysLeft}
-                accent
-              />
+              <Stat label="Days Left" value={computedDaysLeft} accent />
             </div>
           </div>
 
