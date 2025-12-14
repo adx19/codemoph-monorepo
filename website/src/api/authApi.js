@@ -1,6 +1,6 @@
 import toast from "react-hot-toast";
 import { showToast } from "../components/Toast";
-import API_BASE_URL from "./apiConfig";
+import API_BASE_URL from "../api/apiConfig";
 
 const API_BASE =
   API_BASE_URL || 'http://localhost:5000';
