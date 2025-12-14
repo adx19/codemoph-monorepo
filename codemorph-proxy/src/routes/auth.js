@@ -3,46 +3,75 @@ import bcrypt from "bcrypt";
 import { pool } from "../db.js";
 import { signJwt } from "../auth.js";
 import crypto from "crypto";
+const MIN_PASSWORD_LENGTH = 6;
 
 const router = express.Router();
 router.post("/signup", async (req, res) => {
   const { username, email, password } = req.body;
 
+  // 1️⃣ Basic validation
   if (!username || !email || !password) {
-    return res.status(400).json({ message: "missing username/email/password" });
+    return res.status(400).json({
+      message: "missing_fields",
+    });
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
-
-  const userId = crypto.randomUUID();
-  const authId = crypto.randomUUID();
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({
+      message: "password_too_short",
+    });
+  }
 
   try {
-    // 1️⃣ insert into users
+    // 2️⃣ Check if email already exists
+    const [existing] = await pool.query(
+      "SELECT id FROM users WHERE email = ?",
+      [email]
+    );
+
+    if (existing.length > 0) {
+      return res.status(409).json({
+        message: "email_already_exists",
+      });
+    }
+
+    // 3️⃣ Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const userId = crypto.randomUUID();
+    const authId = crypto.randomUUID();
+
+    // 4️⃣ Insert user
     await pool.query(
       `
-  INSERT INTO users (id, username, email, credits, is_paid)
-  VALUES (?, ?, ?, ?, ?)
-  `,
+        INSERT INTO users (id, username, email, credits, is_paid)
+        VALUES (?, ?, ?, ?, ?)
+      `,
       [userId, username, email, 25, 0]
     );
 
-    // 2️⃣ insert into auth providers
+    // 5️⃣ Insert auth provider
     await pool.query(
-      `INSERT INTO user_auth_providers
-       (id, user_id, provider, provider_user_id, password_hash)
-       VALUES (?, ?, 'local', ?, ?)`,
+      `
+        INSERT INTO user_auth_providers
+        (id, user_id, provider, provider_user_id, password_hash)
+        VALUES (?, ?, 'local', ?, ?)
+      `,
       [authId, userId, email, passwordHash]
     );
 
-    const token = signJwt({ id: userId, email });
+    // 6️⃣ Issue token
+    const token = signJwt({ id: userId, email, username });
+
     res.json({
       message: "signup_success",
       token,
     });
   } catch (err) {
-    console.error(err);
-    res.status(400).json({ message: "user_exists_or_error" });
+    console.error("Signup error:", err);
+    res.status(500).json({
+      message: "signup_failed",
+    });
   }
 });
 
