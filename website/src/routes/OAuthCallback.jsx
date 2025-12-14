@@ -1,17 +1,31 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 const OAuthCallback = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   useEffect(() => {
     const token = params.get("token");
 
-    if (token) {
-      localStorage.setItem("token", token);
+    if (!token) {
+      navigate("/", { replace: true });
+      return;
+    }
+
+    try {
+      const [, payload] = token.split(".");
+      const decoded = JSON.parse(atob(payload));
+
+      login(token, {
+        name: decoded.username || decoded.name,
+        email: decoded.email,
+      });
+
       navigate("/dashboard", { replace: true });
-    } else {
+    } catch {
       navigate("/", { replace: true });
     }
   }, []);
