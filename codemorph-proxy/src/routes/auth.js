@@ -53,8 +53,8 @@ router.post("/signup", async (req, res) => {
         email,
         username,
         passwordHash,
-        verificationToken,
-        expires,
+        token,
+        expiresDate,
       ]
     );
 
