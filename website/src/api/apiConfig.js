@@ -1,7 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-
-if (!API_BASE_URL) {
-  throw new Error("VITE_BACKEND_URL is not defined");
-}
+const API_BASE_URL =
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
 export default API_BASE_URL;
