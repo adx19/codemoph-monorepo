@@ -1,12 +1,16 @@
 // src/components/auth/AuthModal.jsx
 import React from "react";
 import { X } from "lucide-react";
-import * as authApi from "../../api/authApi";
+import * as authApi from "../../api/authApi"; // <– alias to avoid name clash
 import { useAuth } from "../../hooks/useAuth";
+import toast from "react-hot-toast";
 import { showToast } from "../Toast";
 import API_BASE_URL from "../../api/apiConfig";
 
-const MIN_PASSWORD_LENGTH = 6;
+
+const handleGitHub = () => {
+  window.location.href = API_BASE_URL + "/auth/github/login";
+};
 
 const AuthModal = ({
   isOpen,
@@ -21,41 +25,34 @@ const AuthModal = ({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
 
+  // pull *context* login
   const { login: authLogin } = useAuth();
 
   React.useEffect(() => {
     if (isOpen) {
       setMode(initialMode);
       setError("");
-      setPassword("");
     }
   }, [isOpen, initialMode]);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
 
+  // src/components/auth/AuthModal.jsx (inside the component)
   const decodeJwtPayload = (token) => {
     try {
       const [, payload] = token.split(".");
       return JSON.parse(atob(payload));
     } catch {
+      showToast("Failed to decode JWT payload.");
       return null;
     }
   };
 
-  const passwordTooShort =
-    mode === "signup" &&
-    password.length > 0 &&
-    password.length < MIN_PASSWORD_LENGTH;
-
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
-
-    if (mode === "signup" && passwordTooShort) {
-      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -67,47 +64,44 @@ const AuthModal = ({
         res = await authApi.signup(name, email, password);
       }
 
-      const token = res.token;
-      if (!token) throw new Error("No token received");
+      const token = res.token || res.data?.token;
+      if (!token) {
+        showToast("No token received from server.");
+        throw new Error("No token received from server");
+      }
 
       const payload = decodeJwtPayload(token);
 
       const userData = {
-        name:
-          payload?.username ||
-          payload?.name ||
-          name ||
-          email.split("@")[0],
+        // backend puts `username` in JWT payload :contentReference[oaicite:3]{index=3}
+        name: payload?.username || payload?.name || name || email.split("@")[0],
         email: payload?.email || email,
       };
 
+      // ✅ this matches AuthContext.login(token, userData)
       authLogin(token, userData);
+
       onAuthSuccess?.();
     } catch (err) {
-      const msg = err?.message;
-
-      if (msg === "email_already_exists") {
-        setError("This email is already registered. Try logging in.");
-      } else if (msg === "password_too_short") {
-        setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
-      } else if (msg === "invalid_credentials") {
-        setError("Invalid email or password.");
-      } else {
-        setError("Authentication failed. Please try again.");
-      }
-
-      showToast("Authentication failed.");
+      showToast("Authentication failed. Please try again.");
       console.error(err);
+      setError(err?.message || "Authentication failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const title = mode === "login" ? "Welcome back" : "Create your account";
+  const subtitle =
+    mode === "login"
+      ? "Sign in to access your CodeMorph dashboard."
+      : "Start with free credits and manage your CodeMorph usage.";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xl">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/95 p-6 text-zinc-50">
+      <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/95 p-6 text-zinc-50 shadow-[0_24px_80px_rgba(0,0,0,0.9)]">
         <button
           type="button"
           onClick={onClose}
@@ -116,58 +110,108 @@ const AuthModal = ({
           <X className="h-4 w-4" />
         </button>
 
-        <h2 className="text-xl font-semibold">
-          {mode === "login" ? "Welcome back" : "Create your account"}
-        </h2>
+        <div className="mb-6 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-orange-500 to-orange-600 shadow-glow">
+            <span className="text-sm font-black text-black">CM</span>
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-semibold tracking-tight">
+              CodeMorph
+            </span>
+            <span className="text-[11px] text-zinc-400">
+              AI Code Transformations
+            </span>
+          </div>
+        </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <div className="mb-5 flex items-baseline justify-between">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+            <p className="mt-1 text-xs text-zinc-400">{subtitle}</p>
+          </div>
+          <div className="inline-flex items-center gap-1 rounded-full bg-zinc-900/80 px-2 py-1 text-[10px] font-medium text-orange-300">
+            <span className="h-1 w-1 rounded-full bg-orange-500" />
+            <span>Orange / Black mode</span>
+          </div>
+        </div>
+
+        <div className="mb-4 flex gap-1 rounded-full bg-zinc-900/80 p-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setMode("login")}
+            className={`flex-1 rounded-full px-3 py-1.5 font-medium transition ${
+              mode === "login"
+                ? "bg-gradient-to-r from-orange-500 to-orange-600 text-black shadow-glow"
+                : "text-zinc-300 hover:text-white"
+            }`}
+          >
+            Log in
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("signup")}
+            className={`flex-1 rounded-full px-3 py-1.5 font-medium transition ${
+              mode === "signup"
+                ? "bg-gradient-to-r from-orange-500 to-orange-600 text-black shadow-glow"
+                : "text-zinc-300 hover:text-white"
+            }`}
+          >
+            Sign up
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "signup" && (
             <div className="space-y-1 text-xs">
-              <label>Name</label>
+              <label className="text-zinc-300">Name</label>
               <input
                 type="text"
-                required
                 value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl bg-zinc-900/70 px-3 py-2"
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Your name"
+                className="w-full rounded-xl border border-white/10 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 outline-none ring-0 placeholder:text-zinc-500 focus:border-orange-500/80 focus:bg-zinc-900/90"
               />
             </div>
           )}
 
           <div className="space-y-1 text-xs">
-            <label>Email</label>
+            <label className="text-zinc-300">Email</label>
             <input
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl bg-zinc-900/70 px-3 py-2"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="Enter your email"
+              className="w-full rounded-xl border border-white/10 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 outline-none ring-0 placeholder:text-zinc-500 focus:border-orange-500/80 focus:bg-zinc-900/90"
             />
           </div>
 
           <div className="space-y-1 text-xs">
-            <label>Password</label>
+            <div className="flex items-center justify-between">
+              <label className="text-zinc-300">Password</label>
+              <button
+                type="button"
+                className="text-[11px] text-zinc-400 hover:text-zinc-200"
+              >
+                Forgot password?
+              </button>
+            </div>
             <input
               type="password"
               required
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl bg-zinc-900/70 px-3 py-2"
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Enter your password"
+              className="w-full rounded-xl border border-white/10 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 outline-none ring-0 placeholder:text-zinc-500 focus:border-orange-500/80 focus:bg-zinc-900/90"
             />
-
-            {passwordTooShort && (
-              <p className="text-[11px] text-red-400">
-                Password must be at least {MIN_PASSWORD_LENGTH} characters
-              </p>
-            )}
           </div>
 
           {error && <p className="text-xs text-red-400">{error}</p>}
 
           <button
             type="submit"
-            disabled={isSubmitting || passwordTooShort}
-            className="w-full rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 py-2 text-sm font-semibold text-black disabled:opacity-60"
+            disabled={isSubmitting}
+            className="mt-1 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2.5 text-sm font-semibold text-black shadow-glow transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
           >
             {isSubmitting
               ? "Please wait…"
@@ -177,37 +221,36 @@ const AuthModal = ({
           </button>
         </form>
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button
-            onClick={() =>
-              (window.location.href = `${API_BASE_URL}/auth/github/start`)
-            }
-            className="rounded-xl border border-white/15 px-4 py-2 text-sm"
-          >
-            GitHub
-          </button>
-
-          <button
-            onClick={() =>
-              (window.location.href = `${API_BASE_URL}/auth/google/start`)
-            }
-            className="rounded-xl border border-white/15 px-4 py-2 text-sm"
-          >
-            Google
-          </button>
+        <div className="mt-5 space-y-3">
+          <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+            <div className="h-px flex-1 bg-zinc-800" />
+            <span>Or continue with</span>
+            <div className="h-px flex-1 bg-zinc-800" />
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <button
+              type="button"
+              onClick={handleGitHub}
+              className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2 text-sm font-semibold text-zinc-100 hover:border-orange-500/70 hover:text-orange-300"
+            >
+              Continue with GitHub
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                window.location.href = `${API_BASE_URL}/auth/google`;
+              }}
+              className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2 text-sm font-semibold text-zinc-100 hover:border-orange-500/70 hover:text-orange-300"
+            >
+              Continue with Google
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 text-center text-xs text-zinc-400">
-          {mode === "login" ? (
-            <button onClick={() => setMode("signup")}>
-              Don’t have an account? Sign up
-            </button>
-          ) : (
-            <button onClick={() => setMode("login")}>
-              Already have an account? Log in
-            </button>
-          )}
-        </div>
+        <p className="mt-4 text-[10px] leading-relaxed text-zinc-500">
+          This site is protected by reCAPTCHA and the Google Privacy Policy and
+          Terms of Service apply.
+        </p>
       </div>
     </div>
   );
