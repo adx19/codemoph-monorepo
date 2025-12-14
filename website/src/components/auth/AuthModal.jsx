@@ -9,7 +9,7 @@ import API_BASE_URL from "../../api/apiConfig";
 
 
 const handleGitHub = () => {
-  window.location.href = API_BASE_URL + "/auth/github/start";
+  window.location.href = API_BASE_URL + "/auth/github/login";
 };
 
 const AuthModal = ({
@@ -238,7 +238,7 @@ const AuthModal = ({
             <button
               type="button"
               onClick={() => {
-                window.location.href = `${API_BASE_URL}/auth/google/start`;
+                window.location.href = `${API_BASE_URL}/auth/google`;
               }}
               className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2 text-sm font-semibold text-zinc-100 hover:border-orange-500/70 hover:text-orange-300"
             >
