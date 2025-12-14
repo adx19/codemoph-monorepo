@@ -11,21 +11,23 @@ const VerifyEmail = () => {
   const [status, setStatus] = useState("loading");
 
   useEffect(() => {
-    const s = params.get("status");
+    const status = params.get("status");
     const token = params.get("token");
 
-    if (s === "success" && token) {
+    if (status === "success" && token) {
       loginWithToken(token);
-      setStatus("success");
 
-      setTimeout(() => {
-        navigate("/dashboard", { replace: true });
-      }, 1200);
-    } else if (s === "expired") {
-      setStatus("expired");
-    } else {
-      setStatus("error");
+      // 🔥 IMMEDIATE redirect
+      navigate("/dashboard", { replace: true });
+      return;
     }
+
+    if (status === "expired") {
+      setStatus("expired");
+      return;
+    }
+
+    setStatus("error");
   }, []);
 
   return (
@@ -35,9 +37,7 @@ const VerifyEmail = () => {
           <>
             <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-indigo-400" />
             <h2 className="text-xl font-semibold">Verifying your email</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              Please wait a moment…
-            </p>
+            <p className="mt-2 text-sm text-zinc-400">Please wait a moment…</p>
           </>
         )}
 
