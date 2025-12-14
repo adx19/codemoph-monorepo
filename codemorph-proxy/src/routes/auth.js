@@ -1,29 +1,27 @@
 import express from "express";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
 import { pool } from "../db.js";
 import { signJwt } from "../auth.js";
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const router = express.Router();
 const MIN_PASSWORD_LENGTH = 6;
 
-// =====================
-// 📧 Mailer
-// =====================
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
+await resend.emails.send({
+  from: process.env.EMAIL_FROM,
+  to: email,
+  subject: "Verify your CodeMorph account",
+  html: `
+    <h2>Welcome to CodeMorph</h2>
+    <p>Please verify your email to activate your account.</p>
+    <a href="${verifyUrl}">Verify Email</a>
+    <p>This link expires in 24 hours.</p>
+  `,
 });
 
-// =====================
-// 🧾 SIGNUP
-// =====================
 router.post("/signup", async (req, res) => {
   const { username, email, password } = req.body;
 
