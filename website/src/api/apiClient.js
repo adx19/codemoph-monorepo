@@ -1,7 +1,7 @@
 import { showToast } from "../components/Toast";
-import { API_BASE_URL } from "./apiConfig";
+import { API_BASE_URL2 } from "./apiConfig";
 
-const API_BASE_URL = API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = API_BASE_URL2 || "http://localhost:5000";
 
 /**
  * Core request helper
