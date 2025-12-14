@@ -1,0 +1,23 @@
+# -------- Global --------
+node_modules/
+.env
+.env.*
+.DS_Store
+
+# -------- VS Code --------
+.vscode/
+*.log
+
+# -------- Extension --------
+CodeMorph/*.vsix
+CodeMorph/dist/
+CodeMorph/out/
+
+# -------- Frontend --------
+website/node_modules/
+website/dist/
+website/build/
+
+# -------- Backend --------
+codemorph-proxy/node_modules/
+codemorph-proxy/dist/
