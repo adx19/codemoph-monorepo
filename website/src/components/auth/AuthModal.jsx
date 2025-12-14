@@ -3,13 +3,8 @@ import React from "react";
 import { X } from "lucide-react";
 import * as authApi from "../../api/authApi";
 import { useAuth } from "../../hooks/useAuth";
-import toast from "react-hot-toast";
 import { showToast } from "../Toast";
 import API_BASE_URL from "../../api/apiConfig";
-
-const handleGitHub = () => {
-  window.location.href = API_BASE_URL + "/auth/github/start";
-};
 
 const AuthModal = ({
   isOpen,
@@ -50,9 +45,6 @@ const AuthModal = ({
     setIsSubmitting(true);
 
     try {
-      // =====================
-      // 🆕 SIGNUP FLOW (NO TOKEN EXPECTED)
-      // =====================
       if (mode === "signup") {
         await authApi.signup(name, email, password);
 
@@ -65,34 +57,25 @@ const AuthModal = ({
         return;
       }
 
-      // =====================
-      // 🔐 LOGIN FLOW
-      // =====================
+      // LOGIN FLOW
       const res = await authApi.login(email, password);
-      const token = res?.token;
 
+      const token = res.token;
       if (!token) {
         throw new Error("No token received");
       }
 
       const payload = decodeJwtPayload(token);
 
-      if (!payload) {
-        throw new Error("Invalid token");
-      }
-
       const userData = {
-        name:
-          payload.username ||
-          payload.name ||
-          email.split("@")[0],
-        email: payload.email || email,
+        name: payload?.username || email.split("@")[0],
+        email: payload?.email || email,
       };
 
       authLogin(token, userData);
       onAuthSuccess?.();
     } catch (err) {
-      if (err?.response?.data?.message === "email_not_verified") {
+      if (err?.message === "email_not_verified") {
         showToast("Please verify your email before logging in.");
       } else {
         showToast("Authentication failed. Please try again.");
@@ -108,43 +91,107 @@ const AuthModal = ({
   const subtitle =
     mode === "login"
       ? "Sign in to access your CodeMorph dashboard."
-      : "Start with free credits and manage your CodeMorph usage.";
+      : "Verify your email to activate your account.";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xl">
       <div className="absolute inset-0" onClick={onClose} />
 
-      <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/95 p-6 text-zinc-50 shadow-[0_24px_80px_rgba(0,0,0,0.9)]">
+      <div className="relative z-10 w-full max-w-md rounded-3xl border border-white/10 bg-zinc-950/95 p-6 text-zinc-50">
         <button
-          type="button"
           onClick={onClose}
           className="absolute right-4 top-4 rounded-full bg-zinc-900/70 p-1 text-zinc-400 hover:text-zinc-100"
         >
           <X className="h-4 w-4" />
         </button>
 
-        {/* 🔒 EVERYTHING BELOW IS UNCHANGED UI */}
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <p className="mt-1 text-xs text-zinc-400">{subtitle}</p>
 
-        {/* ... your existing JSX stays EXACTLY the same ... */}
+        <div className="mt-4 flex gap-1 rounded-full bg-zinc-900/80 p-1 text-xs">
+          <button
+            onClick={() => setMode("login")}
+            className={`flex-1 rounded-full px-3 py-1.5 ${
+              mode === "login"
+                ? "bg-orange-500 text-black"
+                : "text-zinc-300"
+            }`}
+          >
+            Log in
+          </button>
+          <button
+            onClick={() => setMode("signup")}
+            className={`flex-1 rounded-full px-3 py-1.5 ${
+              mode === "signup"
+                ? "bg-orange-500 text-black"
+                : "text-zinc-300"
+            }`}
+          >
+            Sign up
+          </button>
+        </div>
 
-        {/* OAuth buttons */}
-        <button
-          type="button"
-          onClick={handleGitHub}
-          className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2 text-sm font-semibold text-zinc-100 hover:border-orange-500/70 hover:text-orange-300"
-        >
-          Continue with GitHub
-        </button>
+        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          {mode === "signup" && (
+            <input
+              placeholder="Name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-xs"
+            />
+          )}
 
-        <button
-          type="button"
-          onClick={() => {
-            window.location.href = `${API_BASE_URL}/auth/google/start`;
-          }}
-          className="w-full rounded-xl border border-white/15 bg-black/60 px-4 py-2 text-sm font-semibold text-zinc-100 hover:border-orange-500/70 hover:text-orange-300"
-        >
-          Continue with Google
-        </button>
+          <input
+            type="email"
+            placeholder="Email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-xs"
+          />
+
+          <input
+            type="password"
+            placeholder="Password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-xs"
+          />
+
+          {error && <p className="text-xs text-red-400">{error}</p>}
+
+          <button
+            disabled={isSubmitting}
+            className="w-full rounded-xl bg-orange-500 py-2 text-sm font-semibold text-black"
+          >
+            {isSubmitting
+              ? "Please wait…"
+              : mode === "login"
+              ? "Sign In"
+              : "Create Account"}
+          </button>
+        </form>
+
+        <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
+          <button
+            onClick={() =>
+              (window.location.href = `${API_BASE_URL}/auth/github/start`)
+            }
+            className="rounded-xl border border-white/10 px-4 py-2"
+          >
+            Continue with GitHub
+          </button>
+
+          <button
+            onClick={() =>
+              (window.location.href = `${API_BASE_URL}/auth/google/start`)
+            }
+            className="rounded-xl border border-white/10 px-4 py-2"
+          >
+            Continue with Google
+          </button>
+        </div>
       </div>
     </div>
   );
