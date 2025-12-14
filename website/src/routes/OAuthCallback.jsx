@@ -6,6 +6,9 @@ const OAuthCallback = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { login } = useAuth();
+  useEffect(() => {
+    console.log("OAUTH CALLBACK MOUNTED");
+  }, []);
 
   useEffect(() => {
     const token = params.get("token");
