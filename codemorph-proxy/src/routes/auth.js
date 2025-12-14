@@ -56,7 +56,7 @@ router.post("/signup", async (req, res) => {
       ]
     );
 
-    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+    const verifyUrl = `${process.env.BACKEND_URL}/auth/verify-email?token=${token}`;
 
     await resend.emails.send({
       from: process.env.EMAIL_FROM,
