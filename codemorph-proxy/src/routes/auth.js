@@ -72,6 +72,7 @@ router.post("/signup", async (req, res) => {
     );
 
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    await transporter.verify();
 
     await transporter.sendMail({
       from: process.env.EMAIL_FROM,
