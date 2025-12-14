@@ -5,11 +5,11 @@ import * as authApi from "../../api/authApi"; // <– alias to avoid name clash
 import { useAuth } from "../../hooks/useAuth";
 import toast from "react-hot-toast";
 import { showToast } from "../Toast";
+import API_BASE_URL from "../../api/apiConfig";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
 const handleGitHub = () => {
-  window.location.href = 'http://localhost:5000'+ "/auth/github/login";
+  window.location.href = API_BASE_URL + "/auth/github/login";
 };
 
 const AuthModal = ({
