@@ -5,7 +5,6 @@ const { login } = useAuth();
 
 const VerifyEmail = () => {
   const [params] = useSearchParams();
-  const { loginWithToken } = useAuth();
 
   useEffect(() => {
     const status = params.get("status");
