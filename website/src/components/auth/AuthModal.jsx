@@ -28,6 +28,21 @@ const AuthModal = ({
     }
   }, [isOpen, initialMode]);
 
+  // ✅ HANDLE EMAIL VERIFIED REDIRECT
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("verified") === "true") {
+      showToast("Email verified! You can now log in.", { duration: 5000 });
+
+      params.delete("verified");
+      const newUrl =
+        window.location.pathname +
+        (params.toString() ? `?${params.toString()}` : "");
+      window.history.replaceState({}, "", newUrl);
+    }
+  }, []);
+
   if (!isOpen) return null;
 
   const decodeJwtPayload = (token) => {

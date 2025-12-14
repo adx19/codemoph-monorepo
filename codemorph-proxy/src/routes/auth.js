@@ -48,14 +48,7 @@ router.post("/signup", async (req, res) => {
   (id, email, username, password_hash, token, expires)
   VALUES (?, ?, ?, ?, ?, ?)
   `,
-      [
-        verificationId,
-        email,
-        username,
-        passwordHash,
-        token,
-        expiresDate,
-      ]
+      [verificationId, email, username, passwordHash, token, expiresDate]
     );
 
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
@@ -80,17 +73,16 @@ router.post("/signup", async (req, res) => {
     res.status(500).json({ message: "signup_failed" });
   }
 });
-
-/* ======================
-   VERIFY EMAIL
-====================== */
 router.get("/verify-email", async (req, res) => {
   const { token } = req.query;
+  if (!token) return res.status(400).send("Invalid token");
 
   const [rows] = await pool.query(
     `
-    SELECT * FROM email_verifications
-    WHERE token = ? AND expires >= CURDATE()
+    SELECT *
+    FROM email_verifications
+    WHERE token = ?
+      AND expires >= CURDATE()
     `,
     [token]
   );
@@ -100,10 +92,11 @@ router.get("/verify-email", async (req, res) => {
   }
 
   const record = rows[0];
+
   const userId = crypto.randomUUID();
   const authId = crypto.randomUUID();
 
-  // Create real user
+  // 1️⃣ Create user
   await pool.query(
     `
     INSERT INTO users (id, username, email, credits, is_paid)
@@ -112,6 +105,7 @@ router.get("/verify-email", async (req, res) => {
     [userId, record.username, record.email, 25, 0]
   );
 
+  // 2️⃣ Create auth provider
   await pool.query(
     `
     INSERT INTO user_auth_providers
@@ -121,9 +115,10 @@ router.get("/verify-email", async (req, res) => {
     [authId, userId, record.email, record.password_hash]
   );
 
-  // Cleanup
-  await pool.query("DELETE FROM email_verifications WHERE token = ?", [token]);
+  // 3️⃣ Delete verification record
+  await pool.query(`DELETE FROM email_verifications WHERE id = ?`, [record.id]);
 
+  // 4️⃣ Redirect user
   res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
 });
 
