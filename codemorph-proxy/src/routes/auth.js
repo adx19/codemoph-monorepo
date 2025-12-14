@@ -34,13 +34,11 @@ router.post("/signup", async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const verificationId = crypto.randomUUID();
     const token = crypto.randomBytes(32).toString("hex");
 
     const expires = new Date();
     expires.setDate(expires.getDate() + 1);
-    const expiresDate = expires.toISOString().split("T")[0];
-
-    const verificationId = crypto.randomUUID();
 
     await pool.query(
       `
@@ -48,7 +46,14 @@ router.post("/signup", async (req, res) => {
   (id, email, username, password_hash, token, expires)
   VALUES (?, ?, ?, ?, ?, ?)
   `,
-      [verificationId, email, username, passwordHash, token, expiresDate]
+      [
+        verificationId,
+        email,
+        username,
+        passwordHash,
+        token,
+        expires.toISOString().split("T")[0], // DATE only
+      ]
     );
 
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
@@ -88,7 +93,7 @@ router.get("/verify-email", async (req, res) => {
   const pending = rows[0];
   const userId = crypto.randomUUID();
 
-  // 1️⃣ Create user
+  // Create user
   await pool.query(
     `
     INSERT INTO users (id, username, email, credits, is_paid)
@@ -97,7 +102,7 @@ router.get("/verify-email", async (req, res) => {
     [userId, pending.username, pending.email]
   );
 
-  // 2️⃣ Create auth provider
+  // Create auth provider
   await pool.query(
     `
     INSERT INTO user_auth_providers
@@ -107,16 +112,14 @@ router.get("/verify-email", async (req, res) => {
     [crypto.randomUUID(), userId, pending.email, pending.password_hash]
   );
 
-  // 3️⃣ Delete pending verification
-  await pool.query(
-    `DELETE FROM email_verifications WHERE id = ?`,
-    [pending.id]
-  );
+  // Cleanup
+  await pool.query(`DELETE FROM email_verifications WHERE id = ?`, [
+    pending.id,
+  ]);
 
-  // 4️⃣ Redirect to login
+  // Redirect to login
   res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
 });
-
 
 /* ======================
    LOGIN
