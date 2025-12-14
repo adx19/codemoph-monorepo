@@ -1,22 +1,34 @@
 // src/components/auth/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { showToast } from "../Toast";
-import jwtDecode from "jwt-decode";
 
 const AuthContext = createContext(null);
+
+// ✅ SIMPLE JWT DECODE (NO LIB)
+const decodeJwt = (token) => {
+  try {
+    const payload = token.split(".")[1];
+    const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authReady, setAuthReady] = useState(false);
 
-  // ✅ HYDRATE FROM TOKEN ONLY (SOURCE OF TRUTH)
+  // ✅ HYDRATE FROM TOKEN
   useEffect(() => {
     try {
       const token = localStorage.getItem("token");
 
       if (token) {
-        const decoded = jwtDecode(token);
+        const decoded = decodeJwt(token);
+
+        if (!decoded) throw new Error("Invalid token");
 
         const userData = {
           id: decoded.id,
@@ -43,7 +55,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // ✅ NORMAL LOGIN (EMAIL / OAUTH)
+  // ✅ LOGIN (EMAIL / OAUTH / VERIFY EMAIL)
   const login = (token, userData) => {
     if (!token) {
       showToast("Login failed: No token provided.");
@@ -55,7 +67,12 @@ export const AuthProvider = ({ children }) => {
     let finalUser = userData;
 
     if (!finalUser) {
-      const decoded = jwtDecode(token);
+      const decoded = decodeJwt(token);
+      if (!decoded) {
+        showToast("Invalid login token.");
+        return;
+      }
+
       finalUser = {
         id: decoded.id,
         email: decoded.email,
