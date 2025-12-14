@@ -1,18 +1,17 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useAuthContext } from "./AuthContext";
-
-const { login } = useAuthContext();
+import { useAuthContext } from "../components/auth/AuthContext";
 
 const VerifyEmail = () => {
   const [params] = useSearchParams();
+  const { login } = useAuthContext();
 
   useEffect(() => {
     const status = params.get("status");
     const token = params.get("token");
 
     if (status === "success" && token) {
-      login(token); // ✅ NO userData needed
+      login(token);
     }
   }, []);
 

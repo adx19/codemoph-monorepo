@@ -6,12 +6,13 @@ import PricingPreview from "../components/landing/PricingPreview.jsx";
 import Footer from "../components/landing/Footer.jsx";
 import AuthModal from "../components/auth/AuthModal.jsx";
 import { useAuth } from "../hooks/useAuth";
+import { useAuthContext } from "../components/auth/AuthContext.jsx";
 
 const Home = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { isAuthenticated, authReady } = useAuth();
+  const { isAuthenticated, authReady } = useAuthContext();
 
   const [isAuthOpen, setIsAuthOpen] = React.useState(false);
   const [redirectTo, setRedirectTo] = React.useState("/dashboard");
