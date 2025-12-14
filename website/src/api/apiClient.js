@@ -1,7 +1,7 @@
 import { showToast } from "../components/Toast";
 import { API_BASE_URL2 } from "./apiConfig";
 
-const API_BASE_URL = API_BASE_URL2 || "https://codemoph-monorepo-production.up.railway.app";
+const API_BASE_URL = API_BASE_URL2 || "http://localhost:5000";
 
 /**
  * Core request helper
