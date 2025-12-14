@@ -10,9 +10,6 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const MIN_PASSWORD_LENGTH = 6;
 
-// =====================
-// 🧾 SIGNUP
-// =====================
 router.post("/signup", async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -24,81 +21,57 @@ router.post("/signup", async (req, res) => {
     return res.status(400).json({ message: "password_too_short" });
   }
 
-  try {
-    // Check existing email
-    const [existing] = await pool.query(
-      "SELECT id FROM users WHERE email = ?",
-      [email]
-    );
+  // block if already registered
+  const [existing] = await pool.query(
+    "SELECT id FROM users WHERE email = ?",
+    [email]
+  );
 
-    if (existing.length) {
-      return res.status(409).json({ message: "email_already_exists" });
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-    const userId = crypto.randomUUID();
-    const authId = crypto.randomUUID();
-
-    const verificationToken = crypto.randomBytes(32).toString("hex");
-    const expires = new Date();
-    expires.setDate(expires.getDate() + 1);
-
-    await pool.query(
-      `
-      INSERT INTO users
-      (id, username, email, credits, is_paid, is_email_verified, email_verification_token, email_verification_expires)
-      VALUES (?, ?, ?, ?, ?, 0, ?, ?)
-      `,
-      [userId, username, email, 25, 0, verificationToken, expires]
-    );
-
-    await pool.query(
-      `
-      INSERT INTO user_auth_providers
-      (id, user_id, provider, provider_user_id, password_hash)
-      VALUES (?, ?, 'local', ?, ?)
-      `,
-      [authId, userId, email, passwordHash]
-    );
-
-    const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-
-    // ✅ SEND EMAIL (ONLY HERE)
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM,
-      to: email,
-      subject: "Verify your CodeMorph account",
-      html: `
-        <h2>Welcome to CodeMorph</h2>
-        <p>Please verify your email to activate your account.</p>
-        <a href="${verifyUrl}">Verify Email</a>
-        <p>This link expires in 24 hours.</p>
-      `,
-    });
-
-    res.json({ message: "verification_email_sent" });
-  } catch (err) {
-    console.error("Signup error:", err);
-    res.status(500).json({ message: "signup_failed" });
+  if (existing.length) {
+    return res.status(409).json({ message: "email_already_exists" });
   }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const token = crypto.randomBytes(32).toString("hex");
+  const expires = new Date();
+  expires.setDate(expires.getDate() + 1);
+
+  await pool.query(
+    `
+    INSERT INTO email_verifications
+    (id, email, username, password_hash, token, expires)
+    VALUES (?, ?, ?, ?, ?, ?)
+    `,
+    [crypto.randomUUID(), email, username, passwordHash, token, expires]
+  );
+
+  const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM,
+    to: email,
+    subject: "Verify your CodeMorph account",
+    html: `
+      <h2>Welcome to CodeMorph</h2>
+      <p>Please verify your email to activate your account.</p>
+      <a href="${verifyUrl}">Verify Email</a>
+      <p>This link expires in 24 hours.</p>
+    `,
+  });
+
+  res.json({ message: "verification_email_sent" });
 });
 
-// =====================
-// ✅ VERIFY EMAIL
-// =====================
 router.get("/verify-email", async (req, res) => {
   const { token } = req.query;
 
-  if (!token) {
-    return res.status(400).send("Invalid token");
-  }
+  if (!token) return res.status(400).send("Invalid token");
 
   const [rows] = await pool.query(
     `
-    SELECT id FROM users
-    WHERE email_verification_token = ?
-      AND email_verification_expires >= CURDATE()
-      AND is_email_verified = 0
+    SELECT * FROM email_verifications
+    WHERE token = ?
+      AND expires >= CURDATE()
     `,
     [token]
   );
@@ -107,15 +80,32 @@ router.get("/verify-email", async (req, res) => {
     return res.status(400).send("Invalid or expired token");
   }
 
+  const record = rows[0];
+
+  const userId = crypto.randomUUID();
+  const authId = crypto.randomUUID();
+
   await pool.query(
     `
-    UPDATE users
-    SET is_email_verified = 1,
-        email_verification_token = NULL,
-        email_verification_expires = NULL
-    WHERE id = ?
+    INSERT INTO users (id, username, email, credits, is_paid, is_email_verified)
+    VALUES (?, ?, ?, ?, ?, 1)
     `,
-    [rows[0].id]
+    [userId, record.username, record.email, 25, 0]
+  );
+
+  await pool.query(
+    `
+    INSERT INTO user_auth_providers
+    (id, user_id, provider, provider_user_id, password_hash)
+    VALUES (?, ?, 'local', ?, ?)
+    `,
+    [authId, userId, record.email, record.password_hash]
+  );
+
+  // cleanup
+  await pool.query(
+    "DELETE FROM email_verifications WHERE id = ?",
+    [record.id]
   );
 
   res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
