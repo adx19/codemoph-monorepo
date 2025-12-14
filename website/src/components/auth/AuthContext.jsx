@@ -4,7 +4,7 @@ import { showToast } from "../Toast";
 
 const AuthContext = createContext(null);
 
-// ✅ SIMPLE JWT DECODE (NO LIB)
+// 🔐 Safe JWT decode (no dependency)
 const decodeJwt = (token) => {
   try {
     const payload = token.split(".")[1];
@@ -20,14 +20,13 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authReady, setAuthReady] = useState(false);
 
-  // ✅ HYDRATE FROM TOKEN
+  // ✅ Hydrate auth once
   useEffect(() => {
     try {
       const token = localStorage.getItem("token");
 
       if (token) {
         const decoded = decodeJwt(token);
-
         if (!decoded) throw new Error("Invalid token");
 
         const userData = {
@@ -44,7 +43,6 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(false);
       }
     } catch (err) {
-      console.error("Auth hydrate error:", err);
       showToast("Session expired. Please log in again.");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
@@ -55,23 +53,15 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // ✅ LOGIN (EMAIL / OAUTH / VERIFY EMAIL)
   const login = (token, userData) => {
-    if (!token) {
-      showToast("Login failed: No token provided.");
-      return;
-    }
+    if (!token) return;
 
     localStorage.setItem("token", token);
 
     let finalUser = userData;
-
     if (!finalUser) {
       const decoded = decodeJwt(token);
-      if (!decoded) {
-        showToast("Invalid login token.");
-        return;
-      }
+      if (!decoded) return;
 
       finalUser = {
         id: decoded.id,
@@ -101,4 +91,11 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-export const useAuthContext = () => useContext(AuthContext);
+// 🔴 IMPORTANT: ONLY AUTH HOOK YOU SHOULD USE
+export const useAuthContext = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuthContext must be used within AuthProvider");
+  }
+  return ctx;
+};

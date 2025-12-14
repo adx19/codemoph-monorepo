@@ -1,8 +1,9 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useAuthContext } from "../components/auth/AuthContext";
 
 const RequireAuth = ({ children }) => {
-  const { isAuthenticated, authReady } = useAuth();
+  const { isAuthenticated, authReady } = useAuthContext();
   const location = useLocation();
 
   // ⏳ Wait until auth is hydrated from localStorage

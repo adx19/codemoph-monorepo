@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useAuthContext } from "../components/auth/AuthContext";
 
 const OAuthCallback = () => {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login } = useAuthContext();
   useEffect(() => {
     console.log("OAUTH CALLBACK MOUNTED");
   }, []);

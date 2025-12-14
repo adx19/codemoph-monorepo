@@ -4,10 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import apiClient from "../api/apiClient";
 import { useAuth } from "../hooks/useAuth";
+import { useAuthContext } from "../components/auth/AuthContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user } = useAuthContext();
   const {
     data: summary,
     isLoading,

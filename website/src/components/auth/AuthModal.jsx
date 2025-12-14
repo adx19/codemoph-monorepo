@@ -5,6 +5,7 @@ import * as authApi from "../../api/authApi";
 import { useAuth } from "../../hooks/useAuth";
 import { showToast } from "../Toast";
 import API_BASE_URL from "../../api/apiConfig";
+import { useAuthContext } from "./AuthContext";
 
 const AuthModal = ({
   isOpen,
@@ -19,7 +20,7 @@ const AuthModal = ({
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  const { login: authLogin } = useAuth();
+  const { login: authLogin } = useAuthContext();
 
   React.useEffect(() => {
     if (isOpen) {

@@ -4,6 +4,7 @@ import { ChevronDown, CreditCard, LayoutDashboard, LogOut } from "lucide-react";
 import { useAuth } from "./hooks/useAuth";
 import apiClient from "./api/apiClient";
 import { useQuery } from "@tanstack/react-query";
+import { useAuthContext } from "./components/auth/AuthContext";
 
 const navLinkClass = ({ isActive }) =>
   `px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
@@ -25,7 +26,7 @@ const Layout = () => {
       !!localStorage.getItem("token") && location.pathname === "/dashboard",
   });
 
-  const { user, isAuthenticated , logout} = useAuth();
+  const { user, isAuthenticated , logout} = useAuthContext();
   console.log("AUTH STATE →", { user, isAuthenticated });
   console.log("REQUIRE AUTH →", isAuthenticated);
 
