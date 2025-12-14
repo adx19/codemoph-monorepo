@@ -81,44 +81,70 @@ router.post("/signup", async (req, res) => {
 router.get("/verify-email", async (req, res) => {
   const { token } = req.query;
 
-  const [rows] = await pool.query(
-    `SELECT * FROM email_verifications WHERE token = ? AND expires >= CURDATE()`,
-    [token]
-  );
-
-  if (!rows.length) {
-    return res.redirect(`${process.env.FRONTEND_URL}/login?verified=false`);
+  if (!token) {
+    return res.status(400).send("Invalid verification link");
   }
 
-  const pending = rows[0];
-  const userId = crypto.randomUUID();
+  try {
+    // 1️⃣ Get verification record
+    const [rows] = await pool.query(
+      `
+      SELECT *
+      FROM email_verifications
+      WHERE token = ?
+        AND expires >= CURDATE()
+      `,
+      [token]
+    );
 
-  // Create user
-  await pool.query(
-    `
-    INSERT INTO users (id, username, email, credits, is_paid)
-    VALUES (?, ?, ?, 25, 0)
-    `,
-    [userId, pending.username, pending.email]
-  );
+    if (!rows.length) {
+      return res.status(400).send("Verification link expired or invalid");
+    }
 
-  // Create auth provider
-  await pool.query(
-    `
-    INSERT INTO user_auth_providers
-    (id, user_id, provider, provider_user_id, password_hash)
-    VALUES (?, ?, 'local', ?, ?)
-    `,
-    [crypto.randomUUID(), userId, pending.email, pending.password_hash]
-  );
+    const record = rows[0];
 
-  // Cleanup
-  await pool.query(`DELETE FROM email_verifications WHERE id = ?`, [
-    pending.id,
-  ]);
+    const userId = crypto.randomUUID();
+    const authId = crypto.randomUUID();
 
-  // Redirect to login
-  res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
+    // 2️⃣ Create user
+    await pool.query(
+      `
+      INSERT INTO users
+      (id, username, email, credits, is_paid, is_email_verified)
+      VALUES (?, ?, ?, 25, 0, 1)
+      `,
+      [userId, record.username, record.email]
+    );
+
+    // 3️⃣ Create auth provider
+    await pool.query(
+      `
+      INSERT INTO user_auth_providers
+      (id, user_id, provider, provider_user_id, password_hash)
+      VALUES (?, ?, 'local', ?, ?)
+      `,
+      [
+        authId,
+        userId,
+        record.email,
+        record.password_hash
+      ]
+    );
+
+    // 4️⃣ Delete verification record
+    await pool.query(
+      "DELETE FROM email_verifications WHERE id = ?",
+      [record.id]
+    );
+
+    // 5️⃣ Redirect to frontend login
+    res.redirect(
+      `${process.env.FRONTEND_URL}/login?verified=true`
+    );
+  } catch (err) {
+    console.error("Verify email error:", err);
+    res.status(500).send("Email verification failed");
+  }
 });
 
 /* ======================
