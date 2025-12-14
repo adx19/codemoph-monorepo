@@ -68,7 +68,6 @@ const AuthModal = ({
           { duration: 6000 }
         );
 
-        onAuthSuccess?.();
         return;
       }
 

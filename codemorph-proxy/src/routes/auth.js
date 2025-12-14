@@ -75,34 +75,26 @@ router.post("/signup", async (req, res) => {
 });
 router.get("/verify-email", async (req, res) => {
   const { token } = req.query;
-  if (!token) return res.status(400).send("Invalid token");
 
   const [rows] = await pool.query(
-    `
-    SELECT *
-    FROM email_verifications
-    WHERE token = ?
-      AND expires >= CURDATE()
-    `,
+    `SELECT * FROM email_verifications WHERE token = ? AND expires >= CURDATE()`,
     [token]
   );
 
   if (!rows.length) {
-    return res.status(400).send("Invalid or expired token");
+    return res.redirect(`${process.env.FRONTEND_URL}/login?verified=false`);
   }
 
-  const record = rows[0];
-
+  const pending = rows[0];
   const userId = crypto.randomUUID();
-  const authId = crypto.randomUUID();
 
   // 1️⃣ Create user
   await pool.query(
     `
     INSERT INTO users (id, username, email, credits, is_paid)
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, 25, 0)
     `,
-    [userId, record.username, record.email, 25, 0]
+    [userId, pending.username, pending.email]
   );
 
   // 2️⃣ Create auth provider
@@ -112,15 +104,19 @@ router.get("/verify-email", async (req, res) => {
     (id, user_id, provider, provider_user_id, password_hash)
     VALUES (?, ?, 'local', ?, ?)
     `,
-    [authId, userId, record.email, record.password_hash]
+    [crypto.randomUUID(), userId, pending.email, pending.password_hash]
   );
 
-  // 3️⃣ Delete verification record
-  await pool.query(`DELETE FROM email_verifications WHERE id = ?`, [record.id]);
+  // 3️⃣ Delete pending verification
+  await pool.query(
+    `DELETE FROM email_verifications WHERE id = ?`,
+    [pending.id]
+  );
 
-  // 4️⃣ Redirect user
+  // 4️⃣ Redirect to login
   res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
 });
+
 
 /* ======================
    LOGIN
