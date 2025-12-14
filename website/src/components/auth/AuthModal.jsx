@@ -7,7 +7,6 @@ import toast from "react-hot-toast";
 import { showToast } from "../Toast";
 import API_BASE_URL from "../../api/apiConfig";
 
-
 const handleGitHub = () => {
   window.location.href = API_BASE_URL + "/auth/github/login";
 };
@@ -64,10 +63,10 @@ const AuthModal = ({
         res = await authApi.signup(name, email, password);
       }
 
-      const token = res.token || res.data?.token;
-      if (!token) {
-        showToast("No token received from server.");
-        throw new Error("No token received from server");
+      if (mode === "signup") {
+        showToast("Verification email sent. Please check your inbox.");
+        onAuthSuccess?.();
+        return;
       }
 
       const payload = decodeJwtPayload(token);
