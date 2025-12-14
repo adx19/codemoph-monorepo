@@ -40,14 +40,22 @@ router.post("/signup", async (req, res) => {
     expires.setDate(expires.getDate() + 1);
     const expiresDate = expires.toISOString().split("T")[0];
 
-    // Store TEMP signup
+    const verificationId = crypto.randomUUID();
+
     await pool.query(
       `
-      INSERT INTO email_verifications
-      (email, username, password_hash, token, expires)
-      VALUES (?, ?, ?, ?, ?)
-      `,
-      [email, username, passwordHash, token, expiresDate]
+  INSERT INTO email_verifications
+  (id, email, username, password_hash, token, expires)
+  VALUES (?, ?, ?, ?, ?, ?)
+  `,
+      [
+        verificationId,
+        email,
+        username,
+        passwordHash,
+        verificationToken,
+        expires,
+      ]
     );
 
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
@@ -112,10 +120,7 @@ router.get("/verify-email", async (req, res) => {
   );
 
   // Cleanup
-  await pool.query(
-    "DELETE FROM email_verifications WHERE token = ?",
-    [token]
-  );
+  await pool.query("DELETE FROM email_verifications WHERE token = ?", [token]);
 
   res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
 });
