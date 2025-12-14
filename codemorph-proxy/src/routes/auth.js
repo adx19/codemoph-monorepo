@@ -5,23 +5,14 @@ import { pool } from "../db.js";
 import { signJwt } from "../auth.js";
 import { Resend } from "resend";
 
+const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const router = express.Router();
 const MIN_PASSWORD_LENGTH = 6;
 
-await resend.emails.send({
-  from: process.env.EMAIL_FROM,
-  to: email,
-  subject: "Verify your CodeMorph account",
-  html: `
-    <h2>Welcome to CodeMorph</h2>
-    <p>Please verify your email to activate your account.</p>
-    <a href="${verifyUrl}">Verify Email</a>
-    <p>This link expires in 24 hours.</p>
-  `,
-});
-
+// =====================
+// 🧾 SIGNUP
+// =====================
 router.post("/signup", async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -34,6 +25,7 @@ router.post("/signup", async (req, res) => {
   }
 
   try {
+    // Check existing email
     const [existing] = await pool.query(
       "SELECT id FROM users WHERE email = ?",
       [email]
@@ -49,7 +41,7 @@ router.post("/signup", async (req, res) => {
 
     const verificationToken = crypto.randomBytes(32).toString("hex");
     const expires = new Date();
-    expires.setDate(expires.getDate() + 1); // +1 day
+    expires.setDate(expires.getDate() + 1);
 
     await pool.query(
       `
@@ -70,9 +62,9 @@ router.post("/signup", async (req, res) => {
     );
 
     const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
-    await transporter.verify();
 
-    await transporter.sendMail({
+    // ✅ SEND EMAIL (ONLY HERE)
+    await resend.emails.send({
       from: process.env.EMAIL_FROM,
       to: email,
       subject: "Verify your CodeMorph account",
@@ -130,7 +122,7 @@ router.get("/verify-email", async (req, res) => {
 });
 
 // =====================
-// 🔐 LOGIN (BLOCK UNVERIFIED)
+// 🔐 LOGIN
 // =====================
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
@@ -166,10 +158,7 @@ router.post("/login", async (req, res) => {
     username: user.username,
   });
 
-  res.json({
-    message: "login_success",
-    token,
-  });
+  res.json({ message: "login_success", token });
 });
 
 export default router;
