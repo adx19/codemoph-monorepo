@@ -22,10 +22,9 @@ router.post("/signup", async (req, res) => {
   }
 
   // block if already registered
-  const [existing] = await pool.query(
-    "SELECT id FROM users WHERE email = ?",
-    [email]
-  );
+  const [existing] = await pool.query("SELECT id FROM users WHERE email = ?", [
+    email,
+  ]);
 
   if (existing.length) {
     return res.status(409).json({ message: "email_already_exists" });
@@ -46,17 +45,19 @@ router.post("/signup", async (req, res) => {
   );
 
   const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${token}`;
+  console.log("📧 Sending verification email to:", email);
+  console.log("🔗 Verify URL:", verifyUrl);
 
   await resend.emails.send({
     from: process.env.EMAIL_FROM,
     to: email,
     subject: "Verify your CodeMorph account",
     html: `
-      <h2>Welcome to CodeMorph</h2>
-      <p>Please verify your email to activate your account.</p>
-      <a href="${verifyUrl}">Verify Email</a>
-      <p>This link expires in 24 hours.</p>
-    `,
+    <h2>Welcome to CodeMorph</h2>
+    <p>Please verify your email to activate your account.</p>
+    <a href="${verifyUrl}">Verify Email</a>
+    <p>This link expires in 24 hours.</p>
+  `,
   });
 
   res.json({ message: "verification_email_sent" });
@@ -103,10 +104,7 @@ router.get("/verify-email", async (req, res) => {
   );
 
   // cleanup
-  await pool.query(
-    "DELETE FROM email_verifications WHERE id = ?",
-    [record.id]
-  );
+  await pool.query("DELETE FROM email_verifications WHERE id = ?", [record.id]);
 
   res.redirect(`${process.env.FRONTEND_URL}/login?verified=true`);
 });
