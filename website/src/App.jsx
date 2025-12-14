@@ -9,6 +9,7 @@ import SharedCredits from "./pages/SharedCredits.jsx";
 import RequireAuth from "./routes/RequireAuth.jsx";
 import { Toaster } from "react-hot-toast";
 import OAuthCallback from "./routes/OAuthCallback.jsx";
+import VerifyEmail from "./components/auth/VerifyEmail.jsx";
 
 const App = () => {
   return (
@@ -21,6 +22,7 @@ const App = () => {
 
           {/* ✅ OAuth callback — PUBLIC */}
           <Route path="/oauth/callback" element={<OAuthCallback />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           <Route path="/dashboard" element={<Dashboard />} />
 

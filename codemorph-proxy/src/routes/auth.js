@@ -79,16 +79,23 @@ router.post("/signup", async (req, res) => {
   }
 });
 router.get("/verify-email", async (req, res) => {
-  console.log("VERIFY EMAIL CALLED -> ", req.query)
+  console.log("VERIFY EMAIL CALLED -> ", req.query);
+
   const { token } = req.query;
 
   if (!token) {
-    return res.status(400).send("Invalid verification link");
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/verify-email?status=invalid`
+    );
   }
 
+  const conn = await pool.getConnection();
+
   try {
-    // 1️⃣ Get verification record
-    const [rows] = await pool.query(
+    await conn.beginTransaction();
+
+    // 1️⃣ Fetch verification record
+    const [rows] = await conn.query(
       `
       SELECT *
       FROM email_verifications
@@ -99,7 +106,10 @@ router.get("/verify-email", async (req, res) => {
     );
 
     if (!rows.length) {
-      return res.status(400).send("Verification link expired or invalid");
+      await conn.rollback();
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/verify-email?status=expired`
+      );
     }
 
     const record = rows[0];
@@ -108,7 +118,7 @@ router.get("/verify-email", async (req, res) => {
     const authId = crypto.randomUUID();
 
     // 2️⃣ Create user
-    await pool.query(
+    await conn.query(
       `
       INSERT INTO users
       (id, username, email, credits, is_paid, is_email_verified)
@@ -118,33 +128,42 @@ router.get("/verify-email", async (req, res) => {
     );
 
     // 3️⃣ Create auth provider
-    await pool.query(
+    await conn.query(
       `
       INSERT INTO user_auth_providers
       (id, user_id, provider, provider_user_id, password_hash)
       VALUES (?, ?, 'local', ?, ?)
       `,
-      [
-        authId,
-        userId,
-        record.email,
-        record.password_hash
-      ]
+      [authId, userId, record.email, record.password_hash]
     );
 
     // 4️⃣ Delete verification record
-    await pool.query(
-      "DELETE FROM email_verifications WHERE id = ?",
-      [record.id]
-    );
+    await conn.query("DELETE FROM email_verifications WHERE id = ?", [
+      record.id,
+    ]);
 
-    // 5️⃣ Redirect to frontend login
-    res.redirect(
-      `${process.env.FRONTEND_URL}/login?verified=true`
+    await conn.commit();
+
+    // 5️⃣ Issue JWT
+    const jwtToken = signJwt({
+      id: userId,
+      email: record.email,
+      username: record.username,
+    });
+
+    // 6️⃣ Redirect to frontend verify handler
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/verify-email?status=success&token=${jwtToken}`
     );
   } catch (err) {
+    await conn.rollback();
     console.error("Verify email error:", err);
-    res.status(500).send("Email verification failed");
+
+    return res.redirect(
+      `${process.env.FRONTEND_URL}/verify-email?status=error`
+    );
+  } finally {
+    conn.release();
   }
 });
 
