@@ -21,7 +21,7 @@ const Dashboard = () => {
   });
 
   const firstName =
-    user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "User";
+    user?.username?.split(" ")[0] || user?.email?.split("@")[0] || "User";
 
   console.log("dashboard summary →", user, error);
 
