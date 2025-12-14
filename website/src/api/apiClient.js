@@ -1,6 +1,7 @@
 import { showToast } from "../components/Toast";
+import { API_BASE_URL } from "./apiConfig";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_BASE_URL = API_BASE_URL || "http://localhost:5000";
 
 /**
  * Core request helper
