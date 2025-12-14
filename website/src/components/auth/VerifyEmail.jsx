@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useAuth } from "../../hooks/useAuth";
-const { login } = useAuth();
+import { useAuthContext } from "./AuthContext";
+
+const { login } = useAuthContext();
 
 const VerifyEmail = () => {
   const [params] = useSearchParams();
