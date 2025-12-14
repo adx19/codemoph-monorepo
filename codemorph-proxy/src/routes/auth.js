@@ -6,7 +6,7 @@ import { signJwt } from "../auth.js";
 import { Resend } from "resend";
 
 const router = express.Router();
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(import.meta.env.RESEND_API_KEY);
 const MIN_PASSWORD_LENGTH = 6;
 
 /* ======================
@@ -71,6 +71,8 @@ router.post("/signup", async (req, res) => {
         <p>This link expires in 24 hours.</p>
       `,
     });
+
+    console.log(email);
 
     res.json({ message: "verification_email_sent" });
   } catch (err) {
