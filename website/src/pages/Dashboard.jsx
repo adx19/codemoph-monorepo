@@ -60,7 +60,7 @@ const Dashboard = () => {
     );
 
     const diff = Math.ceil(
-      (endOfMonth.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+      (endOfMonth.getTime() - now.getTime()-1) / (1000 * 60 * 60 * 24)
     );
 
     return diff;
