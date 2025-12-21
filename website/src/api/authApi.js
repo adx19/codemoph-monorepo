@@ -2,7 +2,7 @@ import toast from "react-hot-toast";
 import { showToast } from "../components/Toast";
 import API_BASE_URL from "../api/apiConfig";
 const API_BASE =
-  API_BASE_URL || 'http://localhost:5000';
+  API_BASE_URL || 'https://codemoph-monorepo-production.up.railway.app';
 
 export async function login(email, password) {
   const res = await fetch(`${API_BASE}/auth/login`, {

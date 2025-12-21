@@ -82,7 +82,7 @@ router.get("/google/callback", async (req, res) => {
 
   // 5️⃣ Redirect to frontend
   res.redirect(
-    `http://localhost:5173/oauth/callback?token=${token}`
+    `http://www.codemorph.me/oauth/callback?token=${token}`
   );
 });
 
