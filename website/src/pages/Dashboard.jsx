@@ -99,7 +99,7 @@ const Dashboard = () => {
                 const encoded = encodeURIComponent(token);
 
                 // Open VS Code via deep link
-                window.location.href = `vscode://abhi.CodeMorph/auth?token=${encoded}`;
+                window.location.href = `vscode://codemorph.CodeMorph/auth?token=${encoded}`;
               }}
               className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-zinc-900/70 px-4 py-2 text-xs font-semibold hover:border-orange-500/70"
             >
