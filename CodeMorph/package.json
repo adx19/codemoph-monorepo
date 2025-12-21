@@ -1,6 +1,6 @@
 {
   "name": "CodeMorph",
-  "publisher": "abhi",
+  "publisher": "codemorph",
   "displayName": "CodeMorph",
   "description": "Convert code automatically when file extensions change",
   "version": "0.0.6",
