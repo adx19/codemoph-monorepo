@@ -1,4 +1,6 @@
 {
+  "icon" : "icon.png",
+
   "name": "CodeMorph",
   "publisher": "codemorph",
   "displayName": "CodeMorph",
@@ -10,7 +12,7 @@
   "categories": ["Other"],
 
   "activationEvents": [
-    "onCommand:codemorph.start",
+    "*",
     "onUri"
   ],
 
