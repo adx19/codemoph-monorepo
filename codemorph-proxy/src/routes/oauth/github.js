@@ -24,7 +24,7 @@ router.get("/login", (req, res) => {
 /**
  * STEP 2 — GitHub callback
  */
-router.get("/callback", async (req, res) => {
+router.get("/start", async (req, res) => {
   const { code } = req.query;
 
   const client = await pool.connect();
