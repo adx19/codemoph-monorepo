@@ -24,6 +24,10 @@ router.get("/google", (req, res) => {
 router.get("/google/callback", async (req, res) => {
   const { code } = req.query;
 
+  if (!code) {
+    console.error("GOOGLE CALLBACK HIT WITHOUT CODE");
+    return res.status(400).send("Missing code from Google OAuth");
+  }
   // 1️⃣ Exchange code for token
   let tokenRes;
   try {

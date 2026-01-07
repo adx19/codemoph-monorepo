@@ -54,7 +54,7 @@ const apiClient = {
       const encodedToken = encodeURIComponent(data.token);
 
       // Send token to VS Code extension
-      window.location.href = `vscode://abhi.CodeMorph/auth?token=${encodedToken}`;
+      window.location.href = `vscode://codemorph-.CodeMorph/auth?token=${encodedToken}`;
 
       return data;
     },
