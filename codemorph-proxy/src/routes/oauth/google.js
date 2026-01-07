@@ -14,6 +14,8 @@ router.get("/google", (req, res) => {
       redirect_uri: process.env.GOOGLE_OAUTH_REDIRECT,
       response_type: "code",
       scope: "openid email profile",
+      access_type: "offline",
+      prompt: "consent",
     });
 
   res.redirect(redirect);
@@ -23,16 +25,23 @@ router.get("/google/callback", async (req, res) => {
   const { code } = req.query;
 
   // 1️⃣ Exchange code for token
-  const tokenRes = await axios.post(
-    "https://oauth2.googleapis.com/token",
-    {
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      code,
-      grant_type: "authorization_code",
-      redirect_uri: process.env.GOOGLE_OAUTH_REDIRECT,
-    }
-  );
+  let tokenRes;
+  try {
+    tokenRes = await axios.post(
+      "https://oauth2.googleapis.com/token",
+      {
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        code,
+        grant_type: "authorization_code",
+        redirect_uri: process.env.GOOGLE_OAUTH_REDIRECT,
+      },
+      { headers: { "Content-Type": "application/json" } }
+    );
+  } catch (err) {
+    console.error("GOOGLE TOKEN ERROR →", err.response?.data || err.message);
+    return res.status(500).send("Google OAuth token exchange failed");
+  }
 
   const { access_token } = tokenRes.data;
 
@@ -95,9 +104,7 @@ router.get("/google/callback", async (req, res) => {
     const token = signJwt({ id: userId, email });
 
     // 5️⃣ Redirect to frontend
-    res.redirect(
-      `${process.env.FRONTEND_URL}/oauth/callback?token=${token}`
-    );
+    res.redirect(`${process.env.FRONTEND_URL}/oauth/callback?token=${token}`);
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("GOOGLE OAUTH ERROR:", err);
