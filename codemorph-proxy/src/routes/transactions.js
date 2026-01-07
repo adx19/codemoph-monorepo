@@ -9,63 +9,51 @@ router.get("/", apiKeyMiddleware, async (req, res) => {
   const { page = 1, limit = 20, type, search } = req.query;
 
   const offset = (page - 1) * limit;
+  let idx = 1;
 
-  let where = "WHERE user_id = ?";
+  let where = `WHERE user_id = $${idx++}`;
   const params = [userId];
 
-  // Type filter
   if (type && type !== "all") {
-    where += " AND type = ?";
+    where += ` AND type = $${idx++}`;
     params.push(type);
   }
 
-  // 🔍 SEARCH (type, credit_source, amount, date)
   if (search && search.trim()) {
     where += `
       AND (
-        LOWER(type) LIKE ?
-        OR LOWER(credit_source) LIKE ?
-        OR CAST(amount AS CHAR) LIKE ?
-        OR DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') LIKE ?
+        LOWER(type) LIKE $${idx}
+        OR LOWER(credit_source) LIKE $${idx}
+        OR amount::text LIKE $${idx}
+        OR to_char(created_at, 'YYYY-MM-DD HH24:MI:SS') LIKE $${idx}
       )
     `;
-    const q = `%${search.toLowerCase()}%`;
-    params.push(q, q, q, q);
+    params.push(`%${search.toLowerCase()}%`);
+    idx++;
   }
 
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `
-    SELECT
-      id,
-      type,
-      amount,
-      credit_source,
-      meta,
-      created_at
+    SELECT id, type, amount, credit_source, meta, created_at
     FROM transactions
     ${where}
     ORDER BY created_at DESC
-    LIMIT ?
-    OFFSET ?
+    LIMIT $${idx++}
+    OFFSET $${idx++}
     `,
     [...params, Number(limit), Number(offset)]
   );
 
-  const [[{ total }]] = await pool.query(
-    `
-    SELECT COUNT(*) AS total
-    FROM transactions
-    ${where}
-    `,
+  const countRes = await pool.query(
+    `SELECT COUNT(*) FROM transactions ${where}`,
     params
   );
 
   res.json({
     data: rows,
     page: Number(page),
-    total,
+    total: Number(countRes.rows[0].count),
   });
 });
-
 
 export default router;

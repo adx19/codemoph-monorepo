@@ -10,8 +10,6 @@ const router = express.Router();
  * STEP 1 — Redirect to GitHub
  */
 router.get("/login", (req, res) => {
-  console.log("BACKEND_URL =", process.env.BACKEND_URL);
-
   const redirectUri = `${process.env.BACKEND_URL}/auth/github/callback`;
 
   const url =
@@ -29,8 +27,10 @@ router.get("/login", (req, res) => {
 router.get("/callback", async (req, res) => {
   const { code } = req.query;
 
+  const client = await pool.connect();
+
   try {
-    // ✅ Exchange code for access token
+    // 1️⃣ Exchange code for access token
     const tokenRes = await axios.post(
       "https://github.com/login/oauth/access_token",
       {
@@ -43,7 +43,7 @@ router.get("/callback", async (req, res) => {
 
     const githubToken = tokenRes.data.access_token;
 
-    // ✅ Fetch GitHub user
+    // 2️⃣ Fetch GitHub user + emails
     const userRes = await axios.get("https://api.github.com/user", {
       headers: { Authorization: `Bearer ${githubToken}` },
     });
@@ -54,68 +54,84 @@ router.get("/callback", async (req, res) => {
 
     const email =
       emailRes.data.find((e) => e.primary && e.verified)?.email ||
-      emailRes.data[0].email;
+      emailRes.data[0]?.email;
+
+    if (!email) {
+      throw new Error("NO_EMAIL_FROM_GITHUB");
+    }
 
     const githubId = String(userRes.data.id);
     const username = userRes.data.name || userRes.data.login;
 
-    // ✅ Find or create user
-    let userId;
+    await client.query("BEGIN");
 
-    const [[existing]] = await pool.query(
+    // 3️⃣ Find existing user via GitHub provider
+    const existingRes = await client.query(
       `
       SELECT u.id
       FROM users u
-      JOIN user_auth_providers p ON p.user_id = u.id
+      JOIN user_auth_providers p
+        ON p.user_id = u.id
       WHERE p.provider = 'github'
-        AND p.provider_user_id = ?
+        AND p.provider_user_id = $1
       `,
       [githubId]
     );
 
-    if (existing) {
-      userId = existing.id;
+    let userId;
+
+    if (existingRes.rows.length) {
+      userId = existingRes.rows[0].id;
     } else {
-      // check by email (account linking)
-      const [[emailUser]] = await pool.query(
-        `SELECT id FROM users WHERE email = ?`,
+      // 4️⃣ Try account linking by email
+      const emailUserRes = await client.query(
+        `SELECT id FROM users WHERE email = $1`,
         [email]
       );
 
-      if (emailUser) {
-        userId = emailUser.id;
+      if (emailUserRes.rows.length) {
+        userId = emailUserRes.rows[0].id;
       } else {
+        // 5️⃣ Create new user
         userId = crypto.randomUUID();
 
-        await pool.query(
+        await client.query(
           `
           INSERT INTO users (id, username, email, credits, is_paid)
-          VALUES (?, ?, ?, 25, 0)
+          VALUES ($1, $2, $3, 25, false)
           `,
           [userId, username, email]
         );
       }
 
-      await pool.query(
+      // 6️⃣ Attach GitHub provider
+      await client.query(
         `
         INSERT INTO user_auth_providers
         (id, user_id, provider, provider_user_id)
-        VALUES (?, ?, 'github', ?)
+        VALUES ($1, $2, 'github', $3)
         `,
         [crypto.randomUUID(), userId, githubId]
       );
     }
 
-    // ✅ Issue JWT
+    await client.query("COMMIT");
+
+    // 7️⃣ Issue JWT
     const token = signJwt({ id: userId, email, username });
 
-    // ✅ Redirect to frontend
     res.redirect(
       `${process.env.FRONTEND_URL}/oauth/callback?token=${token}`
     );
   } catch (err) {
-    console.error(err);
-    res.redirect(`${process.env.FRONTEND_URL}/login?error=oauth_failed`);
+    await client.query("ROLLBACK");
+    console.error("GITHUB OAUTH ERROR:", err);
+
+    res.redirect(
+      `${process.env.FRONTEND_URL}/login?error=oauth_failed`
+    );
+  } finally {
+    client.release();
   }
 });
 

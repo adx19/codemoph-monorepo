@@ -7,6 +7,7 @@ import { Resend } from "resend";
 
 const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
+
 const MIN_PASSWORD_LENGTH = 6;
 
 /* ======================
@@ -25,11 +26,12 @@ router.post("/signup", async (req, res) => {
 
   try {
     // Check if already verified user exists
-    const [existing] = await pool.query(
-      "SELECT id FROM users WHERE email = ?",
+    const existingResult = await pool.query(
+      "SELECT id FROM users WHERE email = $1",
       [email]
     );
-    if (existing.length) {
+
+    if (existingResult.rows.length) {
       return res.status(409).json({ message: "email_already_exists" });
     }
 
@@ -42,17 +44,17 @@ router.post("/signup", async (req, res) => {
 
     await pool.query(
       `
-  INSERT INTO email_verifications
-  (id, email, username, password_hash, token, expires)
-  VALUES (?, ?, ?, ?, ?, ?)
-  `,
+      INSERT INTO email_verifications
+      (id, email, username, password_hash, token, expires)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      `,
       [
         verificationId,
         email,
         username,
         passwordHash,
         token,
-        expires.toISOString().split("T")[0], // DATE only
+        expires,
       ]
     );
 
@@ -70,17 +72,17 @@ router.post("/signup", async (req, res) => {
       `,
     });
 
-    console.log(email);
-
     res.json({ message: "verification_email_sent" });
   } catch (err) {
     console.error("Signup error:", err);
     res.status(500).json({ message: "signup_failed" });
   }
 });
-router.get("/verify-email", async (req, res) => {
-  console.log("VERIFY EMAIL CALLED -> ", req.query);
 
+/* ======================
+   VERIFY EMAIL
+====================== */
+router.get("/verify-email", async (req, res) => {
   const { token } = req.query;
 
   if (!token) {
@@ -89,60 +91,61 @@ router.get("/verify-email", async (req, res) => {
     );
   }
 
-  const conn = await pool.getConnection();
+  const client = await pool.connect();
 
   try {
-    await conn.beginTransaction();
+    await client.query("BEGIN");
 
     // 1️⃣ Fetch verification record
-    const [rows] = await conn.query(
+    const verifyResult = await client.query(
       `
       SELECT *
       FROM email_verifications
-      WHERE token = ?
-        AND expires >= CURDATE()
+      WHERE token = $1
+        AND expires >= CURRENT_DATE
       `,
       [token]
     );
 
-    if (!rows.length) {
-      await conn.rollback();
+    if (!verifyResult.rows.length) {
+      await client.query("ROLLBACK");
       return res.redirect(
         `${process.env.FRONTEND_URL}/verify-email?status=expired`
       );
     }
 
-    const record = rows[0];
+    const record = verifyResult.rows[0];
 
     const userId = crypto.randomUUID();
     const authId = crypto.randomUUID();
 
     // 2️⃣ Create user
-    await conn.query(
+    await client.query(
       `
       INSERT INTO users
       (id, username, email, credits, is_paid, is_email_verified)
-      VALUES (?, ?, ?, 25, 0, 1)
+      VALUES ($1, $2, $3, 25, false, true)
       `,
       [userId, record.username, record.email]
     );
 
     // 3️⃣ Create auth provider
-    await conn.query(
+    await client.query(
       `
       INSERT INTO user_auth_providers
       (id, user_id, provider, provider_user_id, password_hash)
-      VALUES (?, ?, 'local', ?, ?)
+      VALUES ($1, $2, 'local', $3, $4)
       `,
       [authId, userId, record.email, record.password_hash]
     );
 
     // 4️⃣ Delete verification record
-    await conn.query("DELETE FROM email_verifications WHERE id = ?", [
-      record.id,
-    ]);
+    await client.query(
+      "DELETE FROM email_verifications WHERE id = $1",
+      [record.id]
+    );
 
-    await conn.commit();
+    await client.query("COMMIT");
 
     // 5️⃣ Issue JWT
     const jwtToken = signJwt({
@@ -151,19 +154,18 @@ router.get("/verify-email", async (req, res) => {
       username: record.username,
     });
 
-    // 6️⃣ Redirect to frontend verify handler
     return res.redirect(
       `${process.env.FRONTEND_URL}/verify-email?status=success&token=${jwtToken}`
     );
   } catch (err) {
-    await conn.rollback();
+    await client.query("ROLLBACK");
     console.error("Verify email error:", err);
 
     return res.redirect(
       `${process.env.FRONTEND_URL}/verify-email?status=error`
     );
   } finally {
-    conn.release();
+    client.release();
   }
 });
 
@@ -173,32 +175,40 @@ router.get("/verify-email", async (req, res) => {
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
 
-  const [rows] = await pool.query(
-    `
-    SELECT u.id, u.username, u.email, p.password_hash
-    FROM users u
-    JOIN user_auth_providers p ON p.user_id = u.id
-    WHERE u.email = ? AND p.provider = 'local'
-    `,
-    [email]
-  );
+  try {
+    const result = await pool.query(
+      `
+      SELECT u.id, u.username, u.email, p.password_hash
+      FROM users u
+      JOIN user_auth_providers p ON p.user_id = u.id
+      WHERE u.email = $1
+        AND p.provider = 'local'
+      `,
+      [email]
+    );
 
-  if (!rows.length) {
-    return res.status(401).json({ message: "invalid_credentials" });
+    if (!result.rows.length) {
+      return res.status(401).json({ message: "invalid_credentials" });
+    }
+
+    const user = result.rows[0];
+    const ok = await bcrypt.compare(password, user.password_hash);
+
+    if (!ok) {
+      return res.status(401).json({ message: "invalid_credentials" });
+    }
+
+    const token = signJwt({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+    });
+
+    res.json({ message: "login_success", token });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ message: "login_failed" });
   }
-
-  const ok = await bcrypt.compare(password, rows[0].password_hash);
-  if (!ok) {
-    return res.status(401).json({ message: "invalid_credentials" });
-  }
-
-  const token = signJwt({
-    id: rows[0].id,
-    email: rows[0].email,
-    username: rows[0].username,
-  });
-
-  res.json({ message: "login_success", token });
 });
 
 export default router;

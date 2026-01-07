@@ -32,7 +32,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
     `
     SELECT COUNT(*) AS active
     FROM purchased_credits
-    WHERE user_id = ?
+    WHERE user_id = $1
       AND paid_credits > 0
       AND end_date >= NOW()
     `,
@@ -66,7 +66,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
   }
 
   // 2️⃣ Credits MUST be deducted ONLY after successful reply
-  const conn = await pool.getConnection();
+  const conn = await pool.connect();
 
   try {
     await conn.beginTransaction();
@@ -76,7 +76,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
       `
       SELECT id, paid_credits
       FROM purchased_credits
-      WHERE user_id = ?
+      WHERE user_id = $1
         AND paid_credits > 0
         AND end_date > NOW()
       ORDER BY end_date ASC
@@ -89,14 +89,14 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
     if (paidRows.length > 0) {
       // Deduct paid credits
       await conn.query(
-        `UPDATE purchased_credits SET paid_credits = paid_credits - 1 WHERE id = ?`,
+        `UPDATE purchased_credits SET paid_credits = paid_credits - 1 WHERE id = $1`,
         [paidRows[0].id]
       );
 
       await conn.query(
         `INSERT INTO transactions
          (id, user_id, type, amount, credit_source, meta)
-         VALUES (?, ?, 'usage', -1, 'paid', ?)`,
+         VALUES ($1, $2, 'usage', -1, 'paid', $3)`,
         [crypto.randomUUID(), userId, JSON.stringify({ from: "convert" })]
       );
     } else {
@@ -106,7 +106,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
         SELECT pc.id AS purchased_credit_id, sc.owner_user_id
         FROM shared_credits sc
         JOIN purchased_credits pc ON pc.user_id = sc.owner_user_id
-        WHERE sc.shared_user_id = ?
+        WHERE sc.shared_user_id = $1
           AND sc.end_date > NOW()
           AND pc.paid_credits > 0
           AND pc.end_date > NOW()
@@ -120,14 +120,14 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
       if (sharedRows.length > 0) {
         // Deduct shared credit
         await conn.query(
-          `UPDATE purchased_credits SET paid_credits = paid_credits - 1 WHERE id = ?`,
+          `UPDATE purchased_credits SET paid_credits = paid_credits - 1 WHERE id = $1`,
           [sharedRows[0].purchased_credit_id]
         );
 
         await conn.query(
           `INSERT INTO transactions
            (id, user_id, type, amount, credit_source, meta)
-           VALUES (?, ?, 'usage', -1, 'shared', ?)`,
+           VALUES ($1, $2, 'usage', -1, 'shared', $3)`,
           [
             crypto.randomUUID(),
             userId,
@@ -140,7 +140,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
       } else {
         // Free credits fallback
         const [userRows] = await conn.query(
-          `SELECT credits FROM users WHERE id = ? FOR UPDATE`,
+          `SELECT credits FROM users WHERE id = $1 FOR UPDATE`,
           [userId]
         );
 
@@ -149,14 +149,14 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
         }
 
         await conn.query(
-          `UPDATE users SET credits = credits - 1 WHERE id = ?`,
+          `UPDATE users SET credits = credits - 1 WHERE id = $1`,
           [userId]
         );
 
         await conn.query(
           `INSERT INTO transactions
            (id, user_id, type, amount, credit_source, meta)
-           VALUES (?, ?, 'usage', -1, 'free', ?)`,
+           VALUES ($1, $2, 'usage', -1, 'free', $3)`,
           [crypto.randomUUID(), userId, JSON.stringify({ from: "convert" })]
         );
       }
