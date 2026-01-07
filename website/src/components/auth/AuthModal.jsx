@@ -191,7 +191,7 @@ const AuthModal = ({
         <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
           <button
             onClick={() =>
-              (window.location.href = `${API_BASE_URL}/auth/github/callback`)
+              (window.location.href = `${API_BASE_URL}/auth/github`)
             }
             className="rounded-xl border border-white/10 px-4 py-2"
           >
@@ -200,7 +200,7 @@ const AuthModal = ({
 
           <button
             onClick={() =>
-              (window.location.href = `${API_BASE_URL}/auth/google/callback`)
+              (window.location.href = `${API_BASE_URL}/auth/google`)
             }
             className="rounded-xl border border-white/10 px-4 py-2"
           >
