@@ -25,15 +25,15 @@ router.post("/topup", requireAdmin, async (req, res) => {
   try {
     const [result] = await pool.query(
       `UPDATE users
-       SET credits = credits + ?
-       WHERE id = ?`,
+       SET credits = credits + $1
+       WHERE id = $2`,
       [amount, userId]
     );
 
     await pool.query(
       `INSERT INTO transactions
    (id, user_id, type, amount, credit_source, meta)
-   VALUES (?, ?, 'topup', ?, 'free', ?)`,
+   VALUES ($1, $2, 'topup', $3, 'free', $4)`,
       [crypto.randomUUID(), userId, amount, JSON.stringify({ by: "admin" })]
     );
 

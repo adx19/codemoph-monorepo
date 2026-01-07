@@ -1,4 +1,3 @@
-// routes/dashboard.js  (replace the summary route implementation)
 import express from "express";
 import { pool } from "../db.js";
 import { apiKeyMiddleware } from "../auth.js";
@@ -7,58 +6,59 @@ const router = express.Router();
 
 router.get("/summary", apiKeyMiddleware, async (req, res) => {
   const userId = req.user.id;
-
-  const conn = await pool.getConnection();
+  const conn = await pool.connect();
 
   try {
-    // We read free credits under a short transaction to ensure a consistent read
-    await conn.beginTransaction();
-    const [[freeRow]] = await conn.query(
-      `SELECT credits FROM users WHERE id = ? FOR UPDATE`,
+    await conn.query("BEGIN");
+
+    // Free credits (locked read)
+    const freeRes = await conn.query(
+      `SELECT credits FROM users WHERE id = $1 FOR UPDATE`,
       [userId]
     );
-    await conn.commit();
+    const freeCredits = Number(freeRes.rows[0]?.credits || 0);
 
-    const freeCredits = Number(freeRow?.credits || 0);
+    await conn.query("COMMIT");
 
-    // Paid remaining: read the current remaining paid_credits (single source of truth)
-    const [[paidRow]] = await pool.query(
+    // Paid remaining
+    const paidRes = await pool.query(
       `
-      SELECT COALESCE(SUM(paid_credits), 0) AS total_paid,
-             MAX(plan_type) AS plan,
-             MAX(end_date) AS subscriptionEndsAt
+      SELECT
+        COALESCE(SUM(paid_credits), 0) AS total_paid,
+        MAX(plan_type) AS plan,
+        MAX(end_date) AS subscription_ends_at
       FROM purchased_credits
-      WHERE user_id = ?
+      WHERE user_id = $1
         AND end_date > NOW()
       `,
       [userId]
     );
 
-    const paidRemaining = Number(paidRow?.total_paid || 0);
-    const subscriptionEndsAt = paidRow?.subscriptionEndsAt ? new Date(paidRow.subscriptionEndsAt) : null;
-    const plan = paidRow?.plan || null;
+    const paidRemaining = Number(paidRes.rows[0]?.total_paid || 0);
+    const subscriptionEndsAt = paidRes.rows[0]?.subscription_ends_at
+      ? new Date(paidRes.rows[0].subscription_ends_at)
+      : null;
+    const plan = paidRes.rows[0]?.plan || null;
 
-    // Calculate how many of the paid credits the user has already *consumed* (positive number)
-    const [[paidUsedRow]] = await pool.query(
+    // Paid used
+    const paidUsedRes = await pool.query(
       `
       SELECT COALESCE(ABS(SUM(amount)), 0) AS used_paid
       FROM transactions
-      WHERE user_id = ?
+      WHERE user_id = $1
         AND type = 'usage'
         AND credit_source = 'paid'
       `,
       [userId]
     );
+    const paidUsed = Number(paidUsedRes.rows[0]?.used_paid || 0);
 
-    // Note: paidRemaining is authoritative. We still expose paidUsed for debugging/visibility.
-    const paidUsed = Number(paidUsedRow?.used_paid || 0);
-
-    // Shared credits: find owners who shared with this user and compute how much is still available to the recipient
-    const [owners] = await pool.query(
+    // Shared credits
+    const ownersRes = await pool.query(
       `
       SELECT DISTINCT owner_user_id
       FROM shared_credits
-      WHERE shared_user_id = ?
+      WHERE shared_user_id = $1
         AND end_date > NOW()
       `,
       [userId]
@@ -66,118 +66,87 @@ router.get("/summary", apiKeyMiddleware, async (req, res) => {
 
     let sharedRemaining = 0;
 
-    for (const row of owners) {
-      const ownerId = row.owner_user_id;
-
-      // Owner's current remaining paid credits (authoritative)
-      const [[ownerTotalPaidRow]] = await pool.query(
+    for (const { owner_user_id: ownerId } of ownersRes.rows) {
+      const ownerPaidRes = await pool.query(
         `
         SELECT COALESCE(SUM(paid_credits), 0) AS total_paid
         FROM purchased_credits
-        WHERE user_id = ?
+        WHERE user_id = $1
           AND end_date > NOW()
         `,
         [ownerId]
       );
 
-      const ownerTotalPaid = Number(ownerTotalPaidRow?.total_paid || 0);
+      const ownerTotalPaid = Number(ownerPaidRes.rows[0]?.total_paid || 0);
 
-      // How many paid credits the owner has consumed (positive)
-      const [[ownerUsedRow]] = await pool.query(
-        `
-        SELECT COALESCE(ABS(SUM(amount)), 0) AS used_paid
-        FROM transactions
-        WHERE user_id = ?
-          AND type = 'usage'
-          AND credit_source = 'paid'
-        `,
-        [ownerId]
-      );
-
-      const ownerUsed = Number(ownerUsedRow?.used_paid || 0);
-
-      // How many shared credits (from this owner) the recipient (current user) has consumed (positive)
-      const [[sharedUsedByRecipientRow]] = await pool.query(
+      const sharedUsedRes = await pool.query(
         `
         SELECT COALESCE(ABS(SUM(amount)), 0) AS used_shared
         FROM transactions
-        WHERE user_id = ?
+        WHERE user_id = $1
           AND type = 'usage'
           AND credit_source = 'shared'
-          AND JSON_EXTRACT(meta, '$.owner') = ?
+          AND meta->>'owner' = $2
         `,
         [userId, ownerId]
       );
 
-      const sharedUsedByRecipient = Number(sharedUsedByRecipientRow?.used_shared || 0);
-
-      // Owner remaining = owner's currently available paid credits minus owner's own used (ownerTotalPaid - ownerUsed)
-      // However ownerTotalPaid already reflects remaining paid_credits; ownerUsed is historical usage.
-      // To avoid double-counting, treat ownerRemaining conservatively:
-      // ownerRemaining = ownerTotalPaid - sharedUsedByRecipient
-      const ownerRemaining = Math.max(0, ownerTotalPaid - sharedUsedByRecipient);
-
-      sharedRemaining += ownerRemaining;
+      const sharedUsed = Number(sharedUsedRes.rows[0]?.used_shared || 0);
+      sharedRemaining += Math.max(0, ownerTotalPaid - sharedUsed);
     }
 
-    // Used today: positive number
-    const [[usedTodayRow]] = await pool.query(
+    // Used today
+    const usedTodayRes = await pool.query(
       `
-      SELECT COALESCE(ABS(SUM(amount)), 0) AS usedToday
+      SELECT COALESCE(ABS(SUM(amount)), 0) AS used_today
       FROM transactions
-      WHERE user_id = ?
+      WHERE user_id = $1
         AND type = 'usage'
-        AND DATE(created_at) = CURDATE()
+        AND created_at::date = CURRENT_DATE
       `,
       [userId]
     );
 
-    const usedToday = Number(usedTodayRow?.usedToday || 0);
+    const usedToday = Number(usedTodayRes.rows[0]?.used_today || 0);
 
-    // Shared out and received counts
-    const [[sharedOutRow]] = await pool.query(
+    // Shared counts
+    const sharedOutRes = await pool.query(
       `
-      SELECT COUNT(*) AS sharedOut
+      SELECT COUNT(*)::int AS count
       FROM shared_credits
-      WHERE owner_user_id = ?
+      WHERE owner_user_id = $1
         AND end_date > NOW()
       `,
       [userId]
     );
 
-    const [[receivedRow]] = await pool.query(
+    const receivedRes = await pool.query(
       `
-      SELECT COUNT(*) AS received
+      SELECT COUNT(*)::int AS count
       FROM shared_credits
-      WHERE shared_user_id = ?
+      WHERE shared_user_id = $1
         AND end_date > NOW()
       `,
       [userId]
     );
 
-    const sharedOut = Number(sharedOutRow?.sharedOut || 0);
-    const received = Number(receivedRow?.received || 0);
-
-    const [recentActivity] = await pool.query(
+    const recentActivityRes = await pool.query(
       `
       SELECT type, amount, credit_source, created_at
       FROM transactions
-      WHERE user_id = ?
+      WHERE user_id = $1
       ORDER BY created_at DESC
       LIMIT 10
       `,
       [userId]
     );
 
-    // Final available credits calculation:
-    // freeCredits (from users.credits) + authoritative paidRemaining + sharedRemaining
     const availableCredits = freeCredits + paidRemaining + sharedRemaining;
 
-    // Compute daysLeft (integer) based on subscriptionEndsAt if present
     let daysLeft = null;
     if (subscriptionEndsAt) {
-      const diffMs = subscriptionEndsAt.getTime() - Date.now();
-      daysLeft = diffMs > 0 ? Math.ceil(diffMs / (1000 * 60 * 60 * 24)) : 0;
+      const diffMs = subscriptionEndsAt - Date.now();
+      daysLeft = diffMs > 0 ? Math.ceil(diffMs / 86400000) : 0;
     }
 
     res.json({
@@ -186,28 +155,22 @@ router.get("/summary", apiKeyMiddleware, async (req, res) => {
       sharedCredits: sharedRemaining,
       availableCredits,
       usedToday,
-      sharedOut,
-      received,
+      sharedOut: Number(sharedOutRes.rows[0].count),
+      received: Number(receivedRes.rows[0].count),
       plan,
-      subscriptionEndsAt: subscriptionEndsAt ? subscriptionEndsAt.toISOString() : null,
+      subscriptionEndsAt: subscriptionEndsAt?.toISOString() || null,
       daysLeft,
-      recentActivity,
-      // optional debugging fields:
-      _debug: { paidUsed, freeCreditsFromUsers: freeCredits },
+      recentActivity: recentActivityRes.rows,
+      _debug: { paidUsed },
     });
   } catch (err) {
     console.error("Error in /dashboard/summary:", err);
     try {
-      await conn.rollback();
+      await conn.query("ROLLBACK");
     } catch {}
-    conn.release();
-    res.status(500).json({ message: "summary_failed", debug: err.message || String(err) });
-    return;
+    res.status(500).json({ message: "summary_failed", error: err.message });
   } finally {
-    // ensure release if not already
-    try {
-      conn.release();
-    } catch {}
+    conn.release();
   }
 });
 

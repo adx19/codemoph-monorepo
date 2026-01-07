@@ -11,7 +11,7 @@ const router = express.Router();
 router.get("/sent", apiKeyMiddleware, async (req, res) => {
   const userId = req.user.id;
 
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `
     SELECT
       sc.shared_user_id,
@@ -21,7 +21,7 @@ router.get("/sent", apiKeyMiddleware, async (req, res) => {
       sc.end_date
     FROM shared_credits sc
     JOIN users u ON u.id = sc.shared_user_id
-    WHERE sc.owner_user_id = ?
+    WHERE sc.owner_user_id = $1
       AND sc.end_date > NOW()
     `,
     [userId]
@@ -36,7 +36,7 @@ router.get("/sent", apiKeyMiddleware, async (req, res) => {
 router.get("/received", apiKeyMiddleware, async (req, res) => {
   const userId = req.user.id;
 
-  const [rows] = await pool.query(
+  const { rows } = await pool.query(
     `
     SELECT
       sc.owner_user_id,
@@ -52,7 +52,7 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
       ) AS owner_remaining_credits
     FROM shared_credits sc
     JOIN users u ON u.id = sc.owner_user_id
-    WHERE sc.shared_user_id = ?
+    WHERE sc.shared_user_id = $1
       AND sc.end_date > NOW()
     `,
     [userId]
@@ -62,10 +62,10 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
 });
 
 /**
- * ✅ POST — Share credits (ACCESS-BASED)
+ * ✅ POST — Share credits
  * body: { email }
- */ router.post("/", apiKeyMiddleware, async (req, res) => {
-    console.log("SHARE BODY:", req.body); 
+ */
+router.post("/", apiKeyMiddleware, async (req, res) => {
   const ownerUserId = req.user.id;
   const { email } = req.body;
 
@@ -73,17 +73,17 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
     return res.status(400).json({ message: "missing_email" });
   }
 
-  const conn = await pool.getConnection();
+  const conn = await pool.connect();
 
   try {
-    await conn.beginTransaction();
+    await conn.query("BEGIN");
 
-    // ✅ 1. Owner must have active paid credits
-    const [paid] = await conn.query(
+    // 1️⃣ Owner must have active paid credits
+    const paidRes = await conn.query(
       `
       SELECT 1
       FROM purchased_credits
-      WHERE user_id = ?
+      WHERE user_id = $1
         AND paid_credits > 0
         AND end_date > NOW()
       LIMIT 1
@@ -92,39 +92,41 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
       [ownerUserId]
     );
 
-    if (!paid.length) {
+    if (!paidRes.rows.length) {
       throw new Error("NOT_PAID");
     }
 
-    // ✅ 2. Find recipient by email
-    const [users] = await conn.query(`SELECT id FROM users WHERE email = ?`, [
-      email,
-    ]);
+    // 2️⃣ Find recipient
+    const userRes = await conn.query(
+      `SELECT id FROM users WHERE email = $1`,
+      [email]
+    );
 
-    const sharedUser = users[0];
-
-    console.log("SHARE EMAIL →", JSON.stringify(email));
-
+    const sharedUser = userRes.rows[0];
     if (!sharedUser) {
       throw new Error("USER_NOT_FOUND");
     }
 
-    // ✅ 3. Insert share
+    if (sharedUser.id === ownerUserId) {
+      return res.status(400).json({ message: "cannot_share_to_self" });
+    }
+
+    // 3️⃣ Insert share
     await conn.query(
       `
       INSERT INTO shared_credits
       (id, owner_user_id, shared_user_id, start_date, end_date)
-      VALUES (?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL 1 MONTH))
+      VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '1 month')
       `,
       [crypto.randomUUID(), ownerUserId, sharedUser.id]
     );
 
-    // ✅ 4. Audit logs only
+    // 4️⃣ Audit logs
     await conn.query(
       `
       INSERT INTO transactions
       (id, user_id, type, amount, credit_source, meta)
-      VALUES (?, ?, 'share_out', 0, 'paid', ?)
+      VALUES ($1, $2, 'share_out', 0, 'paid', $3)
       `,
       [
         crypto.randomUUID(),
@@ -137,7 +139,7 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
       `
       INSERT INTO transactions
       (id, user_id, type, amount, credit_source, meta)
-      VALUES (?, ?, 'share_in', 0, 'shared', ?)
+      VALUES ($1, $2, 'share_in', 0, 'shared', $3)
       `,
       [
         crypto.randomUUID(),
@@ -146,11 +148,10 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
       ]
     );
 
-    await conn.commit();
+    await conn.query("COMMIT");
     res.json({ success: true });
   } catch (err) {
-    await conn.rollback();
-    console.error("SHARE ERROR 👉", err.message, err.code);
+    await conn.query("ROLLBACK");
 
     if (err.message === "NOT_PAID") {
       return res.status(403).json({ message: "upgrade_required" });
@@ -160,14 +161,12 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
       return res.status(404).json({ message: "user_not_found" });
     }
 
-    if (err.code === "ER_DUP_ENTRY") {
+    if (err.code === "23505") {
       return res.status(409).json({ message: "already_shared" });
     }
 
-    return res.status(500).json({
-      message: "share_failed",
-      debug: err.message,
-    });
+    console.error("SHARE ERROR:", err);
+    res.status(500).json({ message: "share_failed" });
   } finally {
     conn.release();
   }

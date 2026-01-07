@@ -7,7 +7,8 @@ import { signJwt } from "../../auth.js";
 const router = express.Router();
 
 router.get("/google", (req, res) => {
-  const redirect = `https://accounts.google.com/o/oauth2/v2/auth?` +
+  const redirect =
+    "https://accounts.google.com/o/oauth2/v2/auth?" +
     new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID,
       redirect_uri: process.env.GOOGLE_OAUTH_REDIRECT,
@@ -43,47 +44,69 @@ router.get("/google/callback", async (req, res) => {
 
   const { email, name, id: googleId } = userRes.data;
 
-  // 3️⃣ Find or create user
-  let userId;
+  const client = await pool.connect();
 
-  const [[existing]] = await pool.query(
-    `
-    SELECT u.id
-    FROM users u
-    JOIN user_auth_providers p
-      ON p.user_id = u.id
-    WHERE p.provider = 'google'
-      AND p.provider_user_id = ?
-    `,
-    [googleId]
-  );
+  try {
+    await client.query("BEGIN");
 
-  if (existing) {
-    userId = existing.id;
-  } else {
-    userId = crypto.randomUUID();
-
-    await pool.query(
-      `INSERT INTO users (id, username, email, credits, is_paid)
-       VALUES (?, ?, ?, 25, 0)`,
-      [userId, name, email]
+    // 3️⃣ Find existing user via google provider
+    const existingRes = await client.query(
+      `
+      SELECT u.id
+      FROM users u
+      JOIN user_auth_providers p
+        ON p.user_id = u.id
+      WHERE p.provider = 'google'
+        AND p.provider_user_id = $1
+      `,
+      [googleId]
     );
 
-    await pool.query(
-      `INSERT INTO user_auth_providers
+    let userId;
+
+    if (existingRes.rows.length) {
+      userId = existingRes.rows[0].id;
+    } else {
+      userId = crypto.randomUUID();
+
+      // Create user
+      await client.query(
+        `
+        INSERT INTO users (id, username, email, credits, is_paid)
+        VALUES ($1, $2, $3, 25, false)
+        `,
+        [userId, name, email]
+      );
+
+      // Create auth provider
+      await client.query(
+        `
+        INSERT INTO user_auth_providers
         (id, user_id, provider, provider_user_id)
-       VALUES (?, ?, 'google', ?)`,
-      [crypto.randomUUID(), userId, googleId]
+        VALUES ($1, $2, 'google', $3)
+        `,
+        [crypto.randomUUID(), userId, googleId]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    // 4️⃣ Issue JWT
+    const token = signJwt({ id: userId, email });
+
+    // 5️⃣ Redirect to frontend
+    res.redirect(
+      `${process.env.FRONTEND_URL}/oauth/callback?token=${token}`
     );
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("GOOGLE OAUTH ERROR:", err);
+    res.redirect(
+      `${process.env.FRONTEND_URL}/oauth/callback?error=oauth_failed`
+    );
+  } finally {
+    client.release();
   }
-
-  // 4️⃣ Sign YOUR JWT
-  const token = signJwt({ id: userId, email });
-
-  // 5️⃣ Redirect to frontend
-  res.redirect(
-    `http://codemorph.me/oauth/callback?token=${token}`
-  );
 });
 
 export default router;
