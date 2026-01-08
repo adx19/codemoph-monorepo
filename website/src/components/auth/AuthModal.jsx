@@ -186,7 +186,7 @@ const AuthModal = ({
         <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
           <button
             onClick={() =>{
-              window.location.href = `${API_BASE_URL}/auth/github`
+              window.location.href = `${API_BASE_URL}/auth/github/login`
             }}
             className="rounded-xl border border-white/10 px-4 py-2"
           >
