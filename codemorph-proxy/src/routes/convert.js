@@ -73,7 +73,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
   const conn = await pool.connect();
 
   try {
-    await conn.beginTransaction();
+    await conn.query("BEGIN");
 
     // Try paid credits
     const paid = await conn.query(
@@ -171,12 +171,12 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
       }
     }
 
-    await conn.commit();
+    await conn.query("COMMIT");
     conn.release();
 
     return res.json({ reply });
   } catch (err) {
-    await conn.rollback();
+    await conn.query("ROLLBACK");
     conn.release();
 
     if (err.message === "NO_CREDITS") {
