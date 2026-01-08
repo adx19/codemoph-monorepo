@@ -64,10 +64,9 @@ const AuthModal = ({
       if (mode === "signup") {
         await authApi.signup(name, email, password);
 
-        showToast(
-          "Verification email sent. Please check your inbox.",
-          { duration: 6000 }
-        );
+        showToast("Verification email sent. Please check your inbox.", {
+          duration: 6000,
+        });
 
         return;
       }
@@ -127,9 +126,7 @@ const AuthModal = ({
           <button
             onClick={() => setMode("login")}
             className={`flex-1 rounded-full px-3 py-1.5 ${
-              mode === "login"
-                ? "bg-orange-500 text-black"
-                : "text-zinc-300"
+              mode === "login" ? "bg-orange-500 text-black" : "text-zinc-300"
             }`}
           >
             Log in
@@ -137,9 +134,7 @@ const AuthModal = ({
           <button
             onClick={() => setMode("signup")}
             className={`flex-1 rounded-full px-3 py-1.5 ${
-              mode === "signup"
-                ? "bg-orange-500 text-black"
-                : "text-zinc-300"
+              mode === "signup" ? "bg-orange-500 text-black" : "text-zinc-300"
             }`}
           >
             Sign up
@@ -199,9 +194,9 @@ const AuthModal = ({
           </button>
 
           <button
-            onClick={() =>
-              (window.location.href = `${API_BASE_URL}/auth/google`)
-            }
+            onClick={() => {
+              window.location.href = `${API_BASE_URL}/auth/google`;
+            }}
             className="rounded-xl border border-white/10 px-4 py-2"
           >
             Continue with Google
