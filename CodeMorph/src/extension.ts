@@ -28,8 +28,10 @@ export function activate(context: vscode.ExtensionContext) {
       } catch {}
 
       await context.secrets.store("codemorph_token", token);
-      vscode.window.showInformationMessage("Logged into CodeMorph successfully.");
-    }
+      vscode.window.showInformationMessage(
+        "Logged into CodeMorph successfully."
+      );
+    },
   });
 
   context.subscriptions.push(
@@ -48,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (!isSupportedConversion(fromExt, toExt)) continue;
 
         // ⭐ IMPORTANT — wait for VS Code to finish renaming
-        await new Promise(res => setTimeout(res, 300));
+        await new Promise((res) => setTimeout(res, 300));
 
         await handleConversion(
           file.newUri,
@@ -119,12 +121,7 @@ async function handleConversion(
         cancellable: false,
       },
       async () =>
-        await convertWithAI(
-          sourceCode,
-          fromLang,
-          toLang,
-          addComments === "Yes"
-        )
+        await convertWithAI(sourceCode, fromLang, toLang, addComments === "Yes")
     );
 
     // 🔥 NEW: Directly overwrite renamed file
@@ -142,7 +139,6 @@ async function handleConversion(
     await vscode.workspace.applyEdit(edit);
 
     vscode.window.showInformationMessage("Conversion applied successfully!");
-
   } catch (e: any) {
     vscode.window.showErrorMessage(`Conversion failed: ${e.message}`);
   } finally {
@@ -157,7 +153,7 @@ async function convertWithAI(
   withComments: boolean
 ): Promise<string> {
   const authToken = await getAuthToken();
-  const backendUrl = "https://codemoph-monorepo-production.up.railway.app";
+  const backendUrl = "https://codemorph-tbgv.onrender.com";
 
   if (!authToken) {
     throw new Error("Login required. Open CodeMorph website and login.");
