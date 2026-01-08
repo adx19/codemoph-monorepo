@@ -1,5 +1,6 @@
 {
-  "name": "CodeMorph",
+  "icon" : "icon.png",
+  "name": "codemorph",
   "publisher": "codemorph",
   "displayName": "CodeMorph",
   "description": "Convert code automatically when file extensions change",
