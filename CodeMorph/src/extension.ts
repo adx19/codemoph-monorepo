@@ -165,9 +165,8 @@ async function convertWithAI(
 
   const prompt = `
 Convert the following ${from} code to ${to}.
-${withComments ? "Add comments." : "Do NOT add comments."}
+${withComments ? "Add only required and necessarycomments." : "Do NOT add comments."}
 Return ONLY valid ${to} code.
-
 CODE:
 ${code}
 `;
