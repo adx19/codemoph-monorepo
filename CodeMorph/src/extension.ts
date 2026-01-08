@@ -4,6 +4,7 @@ import { ALLOWED_CONVERSIONS } from "./conversions";
 
 let isConversionRunning = false;
 let extensionContext: vscode.ExtensionContext;
+let outputChannel: vscode.OutputChannel;
 
 const fetch = async (url: string, options?: any) => {
   const mod = await import("node-fetch");
@@ -12,27 +13,32 @@ const fetch = async (url: string, options?: any) => {
 
 export function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
+  outputChannel = vscode.window.createOutputChannel("CodeMorph");
+  outputChannel.show(true);
+  context.subscriptions.push(outputChannel);
 
-  vscode.window.registerUriHandler({
-    async handleUri(uri) {
-      const params = new URLSearchParams(uri.query);
-      let token = params.get("token");
+  context.subscriptions.push(
+    vscode.window.registerUriHandler({
+      async handleUri(uri) {
+        const params = new URLSearchParams(uri.query);
+        let token = params.get("token");
 
-      if (!token) {
-        vscode.window.showErrorMessage("CodeMorph login failed.");
-        return;
-      }
+        if (!token) {
+          vscode.window.showErrorMessage("CodeMorph login failed.");
+          return;
+        }
 
-      try {
-        token = decodeURIComponent(token);
-      } catch {}
+        try {
+          token = decodeURIComponent(token);
+        } catch {}
 
-      await context.secrets.store("codemorph_token", token);
-      vscode.window.showInformationMessage(
-        "Logged into CodeMorph successfully."
-      );
-    },
-  });
+        await context.secrets.store("codemorph_token", token);
+        vscode.window.showInformationMessage(
+          "Logged into CodeMorph successfully."
+        );
+      },
+    })
+  );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("codemorph.start", () => {
@@ -43,6 +49,14 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidRenameFiles(async (event) => {
       for (const file of event.files) {
+        // 🚫 Ignore git/temp files
+        if (
+          file.newUri.fsPath.endsWith(".git") ||
+          file.oldUri.fsPath.endsWith(".git")
+        ) {
+          continue;
+        }
+
         const fromExt = getExtension(file.oldUri);
         const toExt = getExtension(file.newUri);
 
@@ -52,10 +66,27 @@ export function activate(context: vscode.ExtensionContext) {
         // ⭐ IMPORTANT — wait for VS Code to finish renaming
         await new Promise((res) => setTimeout(res, 300));
 
+        try {
+          await vscode.workspace.fs.stat(file.newUri);
+        } catch {
+          console.warn(
+            "File does not exist yet, skipping:",
+            file.newUri.fsPath
+          );
+          continue;
+        }
+
         await handleConversion(
           file.newUri,
           EXTENSION_LANGUAGE_MAP[fromExt],
           EXTENSION_LANGUAGE_MAP[toExt]
+        );
+      }
+      outputChannel.appendLine("File rename detected");
+
+      for (const file of event.files) {
+        outputChannel.appendLine(
+          `Renamed: ${file.oldUri.fsPath} → ${file.newUri.fsPath}`
         );
       }
     })
@@ -181,13 +212,23 @@ ${code}
     }),
   });
 
+  const rawText = await res.text();
+  outputChannel.appendLine("----- RAW BACKEND RESPONSE START -----");
+  outputChannel.appendLine(rawText);
+  outputChannel.appendLine("----- RAW BACKEND RESPONSE END -----");
+
+  let d: ConvertResponse;
+  try {
+    d = JSON.parse(rawText);
+  } catch {
+    throw new Error("Backend returned invalid JSON");
+  }
+
   type ConvertResponse = {
     reply?: string;
     message?: string;
     debug?: string;
   };
-
-  let d: ConvertResponse = {};
 
   try {
     d = (await res.json()) as ConvertResponse;
@@ -204,7 +245,8 @@ ${code}
   }
 
   const cleaned = stripMarkdown(d.reply);
-  console.log("REPLY AFTER STRIP ===>", cleaned);
+  outputChannel.appendLine("REPLY AFTER STRIP:");
+  outputChannel.appendLine(cleaned);
 
   return cleaned;
 }

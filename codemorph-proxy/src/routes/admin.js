@@ -23,12 +23,13 @@ router.post("/topup", requireAdmin, async (req, res) => {
   }
 
   try {
-    const [result] = await pool.query(
+    const result_rows = await pool.query(
       `UPDATE users
        SET credits = credits + $1
        WHERE id = $2`,
       [amount, userId]
     );
+    const result = result_rows.rows;
 
     await pool.query(
       `INSERT INTO transactions

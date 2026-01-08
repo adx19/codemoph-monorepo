@@ -28,22 +28,26 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
   }
 
   // Check if user has paid credits (pre-validation only)
-  const [[{ active }]] = await pool.query(
+  const result = await pool.query(
     `
-    SELECT COUNT(*) AS active
-    FROM purchased_credits
-    WHERE user_id = $1
-      AND paid_credits > 0
-      AND end_date >= NOW()
-    `,
+  SELECT COUNT(*)::int AS active
+  FROM purchased_credits
+  WHERE user_id = $1
+    AND paid_credits > 0
+    AND end_date >= NOW()
+  `,
     [userId]
   );
 
+  const active = result.rows[0]?.active ?? 0;
   const isPaidUser = active > 0;
 
   // FREE TIER check
   if (!isPaidUser) {
-    if (!FREE_LANGUAGES.includes(fromLang) || !FREE_LANGUAGES.includes(toLang)) {
+    if (
+      !FREE_LANGUAGES.includes(fromLang) ||
+      !FREE_LANGUAGES.includes(toLang)
+    ) {
       return res.status(403).json({ message: "upgrade_required" });
     }
   }
@@ -72,7 +76,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
     await conn.beginTransaction();
 
     // Try paid credits
-    const [paidRows] = await conn.query(
+    const paid = await conn.query(
       `
       SELECT id, paid_credits
       FROM purchased_credits
@@ -85,6 +89,8 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
       `,
       [userId]
     );
+
+    const paidRows = paid.rows;
 
     if (paidRows.length > 0) {
       // Deduct paid credits
@@ -101,7 +107,7 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
       );
     } else {
       // Shared credits fallback
-      const [sharedRows] = await conn.query(
+      const share = await conn.query(
         `
         SELECT pc.id AS purchased_credit_id, sc.owner_user_id
         FROM shared_credits sc
@@ -116,6 +122,8 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
         `,
         [userId]
       );
+
+      const sharedRows = share.rows;
 
       if (sharedRows.length > 0) {
         // Deduct shared credit
@@ -139,10 +147,11 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
         );
       } else {
         // Free credits fallback
-        const [userRows] = await conn.query(
+        const user_rows = await conn.query(
           `SELECT credits FROM users WHERE id = $1 FOR UPDATE`,
           [userId]
         );
+        const userRows = user_rows.rows;
 
         if (!userRows.length || userRows[0].credits <= 0) {
           throw new Error("NO_CREDITS");
@@ -166,7 +175,6 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
     conn.release();
 
     return res.json({ reply });
-
   } catch (err) {
     await conn.rollback();
     conn.release();

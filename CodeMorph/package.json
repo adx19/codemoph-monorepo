@@ -1,11 +1,11 @@
 {
   "name": "CodeMorph",
-  "publisher": "codemorph",
+  "publisher": "codemorph-",
   "displayName": "CodeMorph",
   "description": "Convert code automatically when file extensions change",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "engines": {
-    "vscode": "^1.106.1"
+    "vscode": "^1.104.0"
   },
   "categories": ["Other"],
 
