@@ -15,13 +15,17 @@ const razorpay = new Razorpay({
  * Create Razorpay order
  */
 router.post("/create-order", apiKeyMiddleware, async (req, res) => {
-  const amount = 99; // ₹99
+  const userId = req.user.id;
+  const amount = 99;
   const credits = 250;
 
   const order = await razorpay.orders.create({
     amount: amount * 100,
     currency: "INR",
     receipt: crypto.randomUUID(),
+    notes: {
+      userId, // 🔥 THIS IS REQUIRED
+    },
   });
 
   res.json({
@@ -31,6 +35,7 @@ router.post("/create-order", apiKeyMiddleware, async (req, res) => {
     key: process.env.RAZORPAY_KEY_ID,
   });
 });
+
 
 /**
  * Verify payment signature (NO DB writes here)
