@@ -1,100 +1,66 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
-
-DROP TABLE IF EXISTS `purchased_credits`;
-
-CREATE TABLE `purchased_credits` (
-  `id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `paid_credits` int NOT NULL,
-  `plan_type` varchar(50) DEFAULT NULL,
-  `start_date` datetime NOT NULL,
-  `end_date` datetime NOT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `user_id` (`user_id`),
-  CONSTRAINT `purchased_credits_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-
-DROP TABLE IF EXISTS `shared_credits`;
-
-CREATE TABLE `shared_credits` (
-  `id` char(36) NOT NULL,
-  `owner_user_id` char(36) NOT NULL,
-  `shared_user_id` char(36) NOT NULL,
-  `start_date` datetime NOT NULL,
-  `end_date` datetime NOT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_share` (`owner_user_id`,`shared_user_id`),
-  KEY `shared_user_id` (`shared_user_id`),
-  CONSTRAINT `shared_credits_ibfk_1` FOREIGN KEY (`owner_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `shared_credits_ibfk_2` FOREIGN KEY (`shared_user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-DROP TABLE IF EXISTS `user_auth_providers`;
-
-CREATE TABLE `user_auth_providers` (
-  `id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-  `provider` enum('local','google','github','microsoft','apple','linkedin','twitter') NOT NULL,
-  `provider_user_id` varchar(255) NOT NULL,
-  `password_hash` varchar(255) DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_provider_user` (`provider`,`provider_user_id`),
-  UNIQUE KEY `unique_user_provider` (`user_id`,`provider`),
-  CONSTRAINT `user_auth_providers_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-
-DROP TABLE IF EXISTS `users`;
-
-CREATE TABLE `users` (
-  `id` char(36) NOT NULL,
-  `username` varchar(100) NOT NULL,
-  `email` varchar(255) NOT NULL,
-  `is_paid` tinyint(1) DEFAULT '0',
-  `credits` int NOT NULL DEFAULT '25',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `username` (`username`),
-  UNIQUE KEY `email` (`email`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-DROP TABLE IF EXISTS `transactions`;
-
-CREATE TABLE `transactions` (
-  `id` char(36) NOT NULL,
-  `user_id` char(36) NOT NULL,
-
-  `type` enum(
-    'usage',
-    'purchase',
-    'share_out',
-    'share_in',
-    'topup'
-  ) NOT NULL,
-
-  `amount` int NOT NULL,
-  `credit_source` enum(
-    'free',
-    'paid',
-    'shared'
-  ) NOT NULL,
-
-  `meta` json DEFAULT NULL,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (`id`),
-  KEY `user_id` (`user_id`),
-  KEY `type` (`type`),
-  KEY `created_at` (`created_at`),
-
-  CONSTRAINT `transactions_ibfk_1`
-    FOREIGN KEY (`user_id`)
-    REFERENCES `users` (`id`)
-    ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE public.email_verifications (
+  id uuid NOT NULL,
+  email text NOT NULL,
+  username text NOT NULL,
+  password_hash text NOT NULL,
+  token text NOT NULL UNIQUE,
+  expires date NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT email_verifications_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.purchased_credits (
+  id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  paid_credits integer NOT NULL,
+  plan_type text,
+  start_date timestamp without time zone NOT NULL,
+  end_date timestamp without time zone NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT purchased_credits_pkey PRIMARY KEY (id),
+  CONSTRAINT purchased_credits_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.shared_credits (
+  id uuid NOT NULL,
+  owner_user_id uuid NOT NULL,
+  shared_user_id uuid NOT NULL,
+  start_date timestamp without time zone NOT NULL,
+  end_date timestamp without time zone NOT NULL,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT shared_credits_pkey PRIMARY KEY (id),
+  CONSTRAINT shared_credits_owner_user_id_fkey FOREIGN KEY (owner_user_id) REFERENCES public.users(id),
+  CONSTRAINT shared_credits_shared_user_id_fkey FOREIGN KEY (shared_user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.transactions (
+  id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  type text NOT NULL CHECK (type = ANY (ARRAY['usage'::text, 'purchase'::text, 'share_out'::text, 'share_in'::text, 'topup'::text])),
+  amount integer NOT NULL,
+  credit_source text NOT NULL CHECK (credit_source = ANY (ARRAY['free'::text, 'paid'::text, 'shared'::text])),
+  meta jsonb,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT transactions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.user_auth_providers (
+  id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['local'::text, 'google'::text, 'github'::text])),
+  provider_user_id text NOT NULL,
+  password_hash text,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT user_auth_providers_pkey PRIMARY KEY (id),
+  CONSTRAINT user_auth_providers_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.users (
+  id uuid NOT NULL,
+  username text NOT NULL UNIQUE,
+  email text NOT NULL UNIQUE,
+  credits integer NOT NULL DEFAULT 25,
+  is_paid boolean DEFAULT false,
+  is_email_verified boolean DEFAULT false,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);

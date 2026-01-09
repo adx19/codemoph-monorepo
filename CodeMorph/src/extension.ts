@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import { EXTENSION_LANGUAGE_MAP, Language } from "./languages";
 import { ALLOWED_CONVERSIONS } from "./conversions";
 
+
+
 let isConversionRunning = false;
 let extensionContext: vscode.ExtensionContext;
 let outputChannel: vscode.OutputChannel;
@@ -211,44 +213,28 @@ ${code}
       toLang: to,
     }),
   });
+const rawText = await res.text();
 
-  const rawText = await res.text();
-  outputChannel.appendLine("----- RAW BACKEND RESPONSE START -----");
-  outputChannel.appendLine(rawText);
-  outputChannel.appendLine("----- RAW BACKEND RESPONSE END -----");
+outputChannel.appendLine("----- RAW BACKEND RESPONSE START -----");
+outputChannel.appendLine(rawText);
+outputChannel.appendLine("----- RAW BACKEND RESPONSE END -----");
 
-  let d: ConvertResponse;
-  try {
-    d = JSON.parse(rawText);
-  } catch {
-    throw new Error("Backend returned invalid JSON");
-  }
+let parsed: any;
 
-  type ConvertResponse = {
-    reply?: string;
-    message?: string;
-    debug?: string;
-  };
+try {
+  parsed = JSON.parse(rawText);
+} catch {
+  throw new Error("Backend returned invalid JSON");
+}
 
-  try {
-    d = (await res.json()) as ConvertResponse;
-  } catch {
-    d = {};
-  }
+if (!parsed.reply) {
+  throw new Error("No result returned");
+}
 
-  if (!res.ok) {
-    throw new Error(d.message || d.debug || "Conversion failed.");
-  }
+const cleaned = stripMarkdown(parsed.reply);
+return cleaned;
 
-  if (!d.reply) {
-    throw new Error("No result returned.");
-  }
 
-  const cleaned = stripMarkdown(d.reply);
-  outputChannel.appendLine("REPLY AFTER STRIP:");
-  outputChannel.appendLine(cleaned);
-
-  return cleaned;
 }
 
 function stripMarkdown(code: string): string {
