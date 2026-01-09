@@ -194,10 +194,9 @@ async function convertWithAI(
 
   const prompt = `
 Convert the following ${from} code to ${to}.
-${withComments ? "Add comments which are only necessary. No unwanted or irrelevant comments." : "Do NOT add comments."}
+${withComments ? "Add comments." : "Do NOT add comments."}
 Return ONLY valid ${to} code.
-Do not change the class name or variable names unless absolutely necessary.
-Do not add or remove any new classes or functions unless absolutely necessary.
+
 
 CODE:
 ${code}
