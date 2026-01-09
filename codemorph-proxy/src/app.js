@@ -24,11 +24,10 @@ const convertLimiter = rateLimit({
 });
 const app = express();
 app.use(cors());
-
+app.use("/webhooks", webhooks);
 app.use(bodyParser.json({ limit: "200kb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
-app.use("/webhooks", webhooks);
 
 /* ✅ AUTH (local + OAuth) */
 app.use("/auth", authRoutes);
