@@ -1,16 +1,17 @@
-public class test {
+public class Main {
+
+    public static int add(int a, int b) {
+        return a + b;
+    }
 
     public static void main(String[] args) {
         System.out.println("=== CodeMorph Application Test Started ===");
 
-        // Arrange
-        int inputA = 10;
-        int inputB = 20;
+        int input_a = 10;
+        int input_b = 20;
 
-        // Act
-        int result = add(inputA, inputB);
+        int result = add(input_a, input_b);
 
-        // Assert
         if (result == 30) {
             System.out.println("✅ Test Passed: add()");
         } else {
@@ -18,10 +19,5 @@ public class test {
         }
 
         System.out.println("=== Test Completed ===");
-    }
-
-    // Sample method under test
-    private static int add(int a, int b) {
-        return a + b;
     }
 }
