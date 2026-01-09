@@ -1,10 +1,15 @@
 // src/routes/webhooks.js
 import express from "express";
 import crypto from "crypto";
+import Razorpay from "razorpay";
 import { pool } from "../db.js";
 
 const router = express.Router();
-const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "";
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
 router.post(
   "/razorpay",
@@ -13,12 +18,13 @@ router.post(
     const signature = req.headers["x-razorpay-signature"];
     const body = req.body;
 
-    const expected = crypto
-      .createHmac("sha256", RAZORPAY_KEY_SECRET)
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
 
-    if (expected !== signature) {
+    if (expectedSignature !== signature) {
+      console.error("❌ Razorpay webhook: invalid signature");
       return res.status(400).send("invalid signature");
     }
 
@@ -29,22 +35,26 @@ router.post(
     }
 
     const payment = payload.payload.payment.entity;
-    const amount = payment.amount;
     const paymentId = payment.id;
-    const notes = payment.notes || {};
-    const userId = notes.userId;
+    const orderId = payment.order_id;
 
-    if (!userId) {
-      return res.json({ ok: true });
+    // 🔥 CRITICAL FIX: fetch order
+    const order = await razorpay.orders.fetch(orderId);
+
+    const userId = order.notes?.userId;
+    const creditsToAdd = Number(order.notes?.credits);
+
+    if (!userId || !creditsToAdd) {
+      console.error("❌ Missing metadata", { userId, creditsToAdd });
+      return res.status(400).json({ ok: false });
     }
 
-    const creditsToAdd = Math.floor(amount / 100);
     const conn = await pool.connect();
 
     try {
       await conn.query("BEGIN");
 
-      // 🔐 Idempotency check (DB-enforced)
+      // 🔐 Idempotency check
       const exists = await conn.query(
         `
         SELECT 1
@@ -64,8 +74,9 @@ router.post(
       await conn.query(
         `
         INSERT INTO purchased_credits
-        (id, user_id, paid_credits, plan_type, start_date, end_date)
-        VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '1 month')
+          (id, user_id, paid_credits, plan_type, start_date, end_date)
+        VALUES
+          ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '1 month')
         `,
         [
           crypto.randomUUID(),
@@ -78,8 +89,9 @@ router.post(
       await conn.query(
         `
         INSERT INTO transactions
-        (id, user_id, type, amount, credit_source, meta)
-        VALUES ($1, $2, 'purchase', $3, 'paid', $4)
+          (id, user_id, type, amount, credit_source, meta)
+        VALUES
+          ($1, $2, 'purchase', $3, 'paid', $4)
         `,
         [
           crypto.randomUUID(),
@@ -102,10 +114,12 @@ router.post(
       );
 
       await conn.query("COMMIT");
+
+      console.log("✅ Credited user", userId, "for payment", paymentId);
       res.json({ ok: true });
     } catch (err) {
       await conn.query("ROLLBACK");
-      console.error("RAZORPAY WEBHOOK ERROR:", err);
+      console.error("❌ RAZORPAY WEBHOOK ERROR:", err);
       res.status(500).json({ ok: false });
     } finally {
       conn.release();
