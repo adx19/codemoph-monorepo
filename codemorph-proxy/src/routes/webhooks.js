@@ -15,6 +15,8 @@ router.post(
   "/razorpay",
   express.raw({ type: "application/json" }),
   async (req, res) => {
+
+    console.log("🔥 RAZORPAY WEBHOOK HIT");
     const signature = req.headers["x-razorpay-signature"];
     const body = req.body;
 
