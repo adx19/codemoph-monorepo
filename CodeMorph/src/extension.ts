@@ -2,8 +2,6 @@ import * as vscode from "vscode";
 import { EXTENSION_LANGUAGE_MAP, Language } from "./languages";
 import { ALLOWED_CONVERSIONS } from "./conversions";
 
-
-
 let isConversionRunning = false;
 let extensionContext: vscode.ExtensionContext;
 let outputChannel: vscode.OutputChannel;
@@ -51,7 +49,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.workspace.onDidRenameFiles(async (event) => {
       for (const file of event.files) {
-        // 🚫 Ignore git/temp files
         if (
           file.newUri.fsPath.endsWith(".git") ||
           file.oldUri.fsPath.endsWith(".git")
@@ -65,16 +62,11 @@ export function activate(context: vscode.ExtensionContext) {
         if (!fromExt || !toExt || fromExt === toExt) continue;
         if (!isSupportedConversion(fromExt, toExt)) continue;
 
-        // ⭐ IMPORTANT — wait for VS Code to finish renaming
         await new Promise((res) => setTimeout(res, 300));
 
         try {
           await vscode.workspace.fs.stat(file.newUri);
         } catch {
-          console.warn(
-            "File does not exist yet, skipping:",
-            file.newUri.fsPath
-          );
           continue;
         }
 
@@ -82,13 +74,6 @@ export function activate(context: vscode.ExtensionContext) {
           file.newUri,
           EXTENSION_LANGUAGE_MAP[fromExt],
           EXTENSION_LANGUAGE_MAP[toExt]
-        );
-      }
-      outputChannel.appendLine("File rename detected");
-
-      for (const file of event.files) {
-        outputChannel.appendLine(
-          `Renamed: ${file.oldUri.fsPath} → ${file.newUri.fsPath}`
         );
       }
     })
@@ -147,6 +132,10 @@ async function handleConversion(
 
     if (!addComments) return;
 
+    // ✅ ADDED: extract filename safely
+    const fileName =
+      fileUri.path.split("/").pop()?.replace(/\.[^/.]+$/, "") || "Main";
+
     const converted = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -154,10 +143,15 @@ async function handleConversion(
         cancellable: false,
       },
       async () =>
-        await convertWithAI(sourceCode, fromLang, toLang, addComments === "Yes")
+        await convertWithAI(
+          sourceCode,
+          fromLang,
+          toLang,
+          addComments === "Yes",
+          fileName // ✅ ADDED
+        )
     );
 
-    // 🔥 NEW: Directly overwrite renamed file
     const doc = await vscode.workspace.openTextDocument(fileUri);
     await vscode.window.showTextDocument(doc);
 
@@ -183,7 +177,8 @@ async function convertWithAI(
   code: string,
   from: Language,
   to: Language,
-  withComments: boolean
+  withComments: boolean,
+  fileName?: string // ✅ ADDED
 ): Promise<string> {
   const authToken = await getAuthToken();
   const backendUrl = "https://codemorph-tbgv.onrender.com";
@@ -192,11 +187,19 @@ async function convertWithAI(
     throw new Error("Login required. Open CodeMorph website and login.");
   }
 
+  // ✅ ADDED (safe, optional, does not change behavior)
+  const javaHint =
+    to === "java" && fileName
+      ? `
+If the source code already defines a class, preserve it and do not introduce an extra Main class.
+`
+      : "";
+
   const prompt = `
+${javaHint}
 Convert the following ${from} code to ${to}.
 ${withComments ? "Add comments." : "Do NOT add comments."}
 Return ONLY valid ${to} code.
-
 
 CODE:
 ${code}
@@ -214,28 +217,21 @@ ${code}
       toLang: to,
     }),
   });
-const rawText = await res.text();
 
-outputChannel.appendLine("----- RAW BACKEND RESPONSE START -----");
-outputChannel.appendLine(rawText);
-outputChannel.appendLine("----- RAW BACKEND RESPONSE END -----");
+  const rawText = await res.text();
 
-let parsed: any;
+  let parsed: any;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    throw new Error("Backend returned invalid JSON");
+  }
 
-try {
-  parsed = JSON.parse(rawText);
-} catch {
-  throw new Error("Backend returned invalid JSON");
-}
+  if (!parsed.reply) {
+    throw new Error("No result returned");
+  }
 
-if (!parsed.reply) {
-  throw new Error("No result returned");
-}
-
-const cleaned = stripMarkdown(parsed.reply);
-return cleaned;
-
-
+  return stripMarkdown(parsed.reply);
 }
 
 function stripMarkdown(code: string): string {
