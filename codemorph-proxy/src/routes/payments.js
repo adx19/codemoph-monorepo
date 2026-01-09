@@ -12,19 +12,23 @@ const razorpay = new Razorpay({
 });
 
 /**
- * Create Razorpay order
+ * CREATE ORDER
+ * - Creates Razorpay order
+ * - Attaches userId + credits in notes
  */
 router.post("/create-order", apiKeyMiddleware, async (req, res) => {
   const userId = req.user.id;
-  const amount = 99;
+
+  const amount = 99;   // INR
   const credits = 250;
 
   const order = await razorpay.orders.create({
-    amount: amount * 100,
+    amount: amount * 100, // paise
     currency: "INR",
     receipt: crypto.randomUUID(),
     notes: {
-      userId, // 🔥 THIS IS REQUIRED
+      userId,     // 🔥 used by webhook via order fetch
+      credits,    // 🔥 deterministic credits
     },
   });
 
@@ -36,13 +40,17 @@ router.post("/create-order", apiKeyMiddleware, async (req, res) => {
   });
 });
 
-
 /**
- * Verify payment signature (NO DB writes here)
+ * VERIFY PAYMENT (FRONTEND CONFIRMATION ONLY)
+ * - NO DB writes here
+ * - Webhook is the source of truth
  */
 router.post("/verify", apiKeyMiddleware, async (req, res) => {
-  const { razorpay_payment_id, razorpay_order_id, razorpay_signature } =
-    req.body;
+  const {
+    razorpay_payment_id,
+    razorpay_order_id,
+    razorpay_signature,
+  } = req.body;
 
   const body = `${razorpay_order_id}|${razorpay_payment_id}`;
 
@@ -55,12 +63,12 @@ router.post("/verify", apiKeyMiddleware, async (req, res) => {
     return res.status(400).json({ message: "payment_verification_failed" });
   }
 
-  // ✅ Payment verified, webhook will credit
+  // ✅ Verified — webhook will handle DB writes
   res.json({ verified: true });
 });
 
 /**
- * Payment history (READ ONLY)
+ * PAYMENT HISTORY (READ ONLY)
  */
 router.get("/", apiKeyMiddleware, async (req, res) => {
   const userId = req.user.id;
