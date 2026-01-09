@@ -197,6 +197,7 @@ Convert the following ${from} code to ${to}.
 ${withComments ? "Add comments." : "Do NOT add comments."}
 Return ONLY valid ${to} code.
 Do not change the class name or variable names unless absolutely necessary.
+Do not add any new classes or functions unless absolutely necessary.
 
 CODE:
 ${code}
