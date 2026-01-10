@@ -78,6 +78,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+
+  ensureLoggedIn();
 }
 
 function getExtension(uri: vscode.Uri): string | null {
@@ -96,11 +98,33 @@ async function getAuthToken(): Promise<string | undefined> {
   return await extensionContext.secrets.get("codemorph_token");
 }
 
+
+async function ensureLoggedIn(): Promise<boolean> {
+  const token = await getAuthToken();
+  if (token) return true;
+
+  const choice = await vscode.window.showInformationMessage(
+    "Please log in to continue using CodeMorph.",
+    { modal: true },
+    "Login"
+  );
+
+  if (choice === "Login") {
+    vscode.env.openExternal(vscode.Uri.parse("https://www.codemorph.me"));
+  }
+
+  return false;
+}
+
 async function handleConversion(
   fileUri: vscode.Uri,
   fromLang: Language,
   toLang: Language
 ) {
+  // ✅ HARD LOGIN ENFORCEMENT
+  const loggedIn = await ensureLoggedIn();
+  if (!loggedIn) return;
+
   if (isConversionRunning) {
     vscode.window.showWarningMessage("CodeMorph is already converting.");
     return;
@@ -120,8 +144,7 @@ async function handleConversion(
     const choice = await vscode.window.showInformationMessage(
       `Convert ${fromLang.toUpperCase()} → ${toLang.toUpperCase()}?`,
       { modal: true },
-      "Convert",
-      "Cancel"
+      "Convert"
     );
 
     if (choice !== "Convert") return;
@@ -132,7 +155,6 @@ async function handleConversion(
 
     if (!addComments) return;
 
-    // ✅ ADDED: extract filename safely
     const fileName =
       fileUri.path.split("/").pop()?.replace(/\.[^/.]+$/, "") || "Main";
 
@@ -148,7 +170,7 @@ async function handleConversion(
           fromLang,
           toLang,
           addComments === "Yes",
-          fileName // ✅ ADDED
+          fileName
         )
     );
 
@@ -173,21 +195,21 @@ async function handleConversion(
   }
 }
 
+
 async function convertWithAI(
   code: string,
   from: Language,
   to: Language,
   withComments: boolean,
-  fileName?: string // ✅ ADDED
+  fileName?: string
 ): Promise<string> {
   const authToken = await getAuthToken();
   const backendUrl = "https://codemorph-tbgv.onrender.com";
 
   if (!authToken) {
-    throw new Error("Login required. Open CodeMorph website and login.");
+    throw new Error("Login required.");
   }
 
-  // ✅ ADDED (safe, optional, does not change behavior)
   const javaHint =
     to === "java" && fileName
       ? `
@@ -228,6 +250,23 @@ ${code}
   }
 
   if (!parsed.reply) {
+    if (parsed.error === "insufficient_credits") {
+      const choice = await vscode.window.showInformationMessage(
+        "You have insufficient credit balance. Do you want to purchase more credits?",
+        { modal: true },
+        "Yes",
+        "No"
+      );
+
+      if (choice === "Yes") {
+        vscode.env.openExternal(
+          vscode.Uri.parse("https://www.codemorph.me/payments")
+        );
+      }
+
+      throw new Error("Insufficient credits");
+    }
+
     throw new Error("No result returned");
   }
 
