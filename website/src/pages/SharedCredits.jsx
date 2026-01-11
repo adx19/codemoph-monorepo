@@ -44,13 +44,17 @@ const SharedCredits = () => {
   }, []);
 
   const handleShare = async () => {
-    try {
-      await apiClient.sharedCredits.share({
-        email: email, // ✅ STRING ONLY
-      });
+    if (!email) {
+      showToast("Please enter an email");
+      return;
+    }
 
-      setShowModal(false);
+    try {
+      await apiClient.sharedCredits.share({ email });
+      setEmail("");
+      setShowShareModal(false);
       fetchSharedCredits();
+      showToast("Credits shared successfully");
     } catch (err) {
       showToast("Failed to share credits");
       console.error("SHARE ERROR 👉", err);
@@ -86,15 +90,21 @@ const SharedCredits = () => {
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-white/8 bg-zinc-950/70 p-4">
           <p className="text-xs text-zinc-400">Total Shared</p>
-          <p className="mt-2 text-lg font-semibold text-zinc-50">{totalShared}</p>
+          <p className="mt-2 text-lg font-semibold text-zinc-50">
+            {totalShared}
+          </p>
         </div>
         <div className="rounded-2xl border border-white/8 bg-zinc-950/70 p-4">
           <p className="text-xs text-zinc-400">Total Received</p>
-          <p className="mt-2 text-lg font-semibold text-zinc-50">{totalReceived}</p>
+          <p className="mt-2 text-lg font-semibold text-zinc-50">
+            {totalReceived}
+          </p>
         </div>
         <div className="rounded-2xl border border-white/8 bg-zinc-950/70 p-4">
           <p className="text-xs text-zinc-400">Active Shares</p>
-          <p className="mt-2 text-lg font-semibold text-zinc-50">{activeShares}</p>
+          <p className="mt-2 text-lg font-semibold text-zinc-50">
+            {activeShares}
+          </p>
         </div>
       </div>
 
@@ -204,6 +214,43 @@ const SharedCredits = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-md rounded-2xl bg-zinc-950 p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-zinc-100">
+              Share Credits
+            </h2>
+
+            <p className="mt-1 text-xs text-zinc-400">
+              Enter the email of the user you want to share credits with.
+            </p>
+
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="user@example.com"
+              className="mt-4 w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-orange-500"
+            />
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                onClick={() => setShowShareModal(false)}
+                className="rounded-lg px-4 py-2 text-xs text-zinc-400 hover:text-zinc-200"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleShare}
+                className="rounded-lg bg-orange-500 px-4 py-2 text-xs font-semibold text-black hover:brightness-110"
+              >
+                Share
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
