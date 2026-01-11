@@ -48,6 +48,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.workspace.onDidRenameFiles(async (event) => {
+      const loggedIn = await ensureLoggedIn();
+      if (!loggedIn) return;
       for (const file of event.files) {
         if (
           file.newUri.fsPath.endsWith(".git") ||
@@ -78,8 +80,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-
-  ensureLoggedIn();
 }
 
 function getExtension(uri: vscode.Uri): string | null {
@@ -97,7 +97,6 @@ function isSupportedConversion(fromExt: string, toExt: string): boolean {
 async function getAuthToken(): Promise<string | undefined> {
   return await extensionContext.secrets.get("codemorph_token");
 }
-
 
 async function ensureLoggedIn(): Promise<boolean> {
   const token = await getAuthToken();
@@ -156,7 +155,10 @@ async function handleConversion(
     if (!addComments) return;
 
     const fileName =
-      fileUri.path.split("/").pop()?.replace(/\.[^/.]+$/, "") || "Main";
+      fileUri.path
+        .split("/")
+        .pop()
+        ?.replace(/\.[^/.]+$/, "") || "Main";
 
     const converted = await vscode.window.withProgress(
       {
@@ -195,7 +197,6 @@ async function handleConversion(
   }
 }
 
-
 async function convertWithAI(
   code: string,
   from: Language,
@@ -220,7 +221,11 @@ If the source code already defines a class, preserve it and do not introduce an 
   const prompt = `
 ${javaHint}
 Convert the following ${from} code to ${to}.
-${withComments ? "Add comments." : "Do NOT add comments."}
+${
+  withComments
+    ? "Add comments which are necessary. Do not add unnecessary comments."
+    : "Do NOT add comments."
+}
 Return ONLY valid ${to} code.
 
 CODE:
