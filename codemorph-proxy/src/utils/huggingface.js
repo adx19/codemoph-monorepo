@@ -37,7 +37,7 @@ export async function generateResponse(prompt) {
   const makeRequest = async () => {
     try {
       const response = await axios.post(
-        `https://api-inference.huggingface.co/models/${MODEL}`,
+        `https://router.huggingface.co/models/${MODEL}`,
         {
           inputs: prompt,
           parameters: {
