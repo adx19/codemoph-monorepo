@@ -1,6 +1,6 @@
 import express from "express";
 import { pool } from "../db.js";
-import { generateResponse } from "../utils/gemini.js";
+import { generateResponse } from "../utils/huggingface.js";
 import { apiKeyMiddleware } from "../auth.js";
 import crypto from "crypto";
 
@@ -27,22 +27,20 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
     return res.status(400).json({ message: "missing_language_info" });
   }
 
-  // Check if user has paid credits (pre-validation only)
   const result = await pool.query(
     `
-  SELECT COUNT(*)::int AS active
-  FROM purchased_credits
-  WHERE user_id = $1
-    AND paid_credits > 0
-    AND end_date >= NOW()
-  `,
+    SELECT COUNT(*)::int AS active
+    FROM purchased_credits
+    WHERE user_id = $1
+      AND paid_credits > 0
+      AND end_date >= NOW()
+    `,
     [userId]
   );
 
   const active = result.rows[0]?.active ?? 0;
   const isPaidUser = active > 0;
 
-  // FREE TIER check
   if (!isPaidUser) {
     if (
       !FREE_LANGUAGES.includes(fromLang) ||
@@ -55,27 +53,24 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
   let reply;
 
   try {
-    // 1️⃣ Try Gemini FIRST — do NOT reduce credits yet
     reply = await generateResponse(prompt);
 
     if (!reply) {
       throw new Error("EMPTY_REPLY");
     }
   } catch (err) {
-    console.error("Gemini error → Credits NOT deducted:", err);
+    console.error("AI error → Credits NOT deducted:", err);
     return res.status(500).json({
       message: "convert_failed",
       debug: err.message || String(err),
     });
   }
 
-  // 2️⃣ Credits MUST be deducted ONLY after successful reply
   const conn = await pool.connect();
 
   try {
     await conn.query("BEGIN");
 
-    // Try paid credits
     const paid = await conn.query(
       `
       SELECT id, paid_credits
@@ -93,7 +88,6 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
     const paidRows = paid.rows;
 
     if (paidRows.length > 0) {
-      // Deduct paid credits
       await conn.query(
         `UPDATE purchased_credits SET paid_credits = paid_credits - 1 WHERE id = $1`,
         [paidRows[0].id]
@@ -106,7 +100,6 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
         [crypto.randomUUID(), userId, JSON.stringify({ from: "convert" })]
       );
     } else {
-      // Shared credits fallback
       const share = await conn.query(
         `
         SELECT pc.id AS purchased_credit_id, sc.owner_user_id
@@ -126,7 +119,6 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
       const sharedRows = share.rows;
 
       if (sharedRows.length > 0) {
-        // Deduct shared credit
         await conn.query(
           `UPDATE purchased_credits SET paid_credits = paid_credits - 1 WHERE id = $1`,
           [sharedRows[0].purchased_credit_id]
@@ -146,11 +138,11 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
           ]
         );
       } else {
-        // Free credits fallback
         const user_rows = await conn.query(
           `SELECT credits FROM users WHERE id = $1 FOR UPDATE`,
           [userId]
         );
+
         const userRows = user_rows.rows;
 
         if (!userRows.length || userRows[0].credits <= 0) {
