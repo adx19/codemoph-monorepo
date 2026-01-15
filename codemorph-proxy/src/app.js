@@ -24,6 +24,7 @@ const convertLimiter = rateLimit({
 });
 const app = express();
 app.use(cors());
+app.set("trust proxy", 1);
 app.use("/webhooks", webhooks);
 app.use(express.json({ limit: "100kb" }));
 app.use(express.urlencoded({ extended: true, limit: "100kb" }));
