@@ -1,6 +1,6 @@
 import express from "express";
 import { pool } from "../db.js";
-import { generateResponse } from "../utils/gemini.js";
+import { generateResponse } from "../utils/claude.js";
 import { apiKeyMiddleware } from "../auth.js";
 import crypto from "crypto";
 
