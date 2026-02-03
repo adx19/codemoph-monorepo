@@ -1,43 +1,7 @@
 import React from "react";
 import { ArrowLeft, Check, Crown, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import apiClient from "../api/apiClient";
-
-const loadRazorpay = () =>
-  new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true);
-
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload = () => resolve(true);
-    document.body.appendChild(script);
-  });
-const handleUpgrade = async () => {
-  await loadRazorpay();
-
-  // ✅ CORRECT
-  const data = await apiClient.payments.createOrder({
-    plan: "monthly_99",
-  });
-
-  const options = {
-    key: data.key,
-    order_id: data.orderId,
-    amount: data.amount * 100,
-    currency: "INR",
-    name: "CodeMorph Pro",
-    description: "₹99 / month • 250 credits",
-    handler: async (response) => {
-      // ✅ CORRECT
-      await apiClient.payments.verify({
-        ...response,
-      });
-      window.location.reload();
-    },
-  };
-
-  new window.Razorpay(options).open();
-};
+import RazorpaySubscriptionButton from "../components/RazorpaySubscriptionButton"; // ✅ NEW
 
 const plans = [
   {
@@ -55,23 +19,22 @@ const plans = [
       "Community support",
     ],
   },
- {
-  id: 'pro-monthly',
-  name: 'Pro',
-  price: '₹99',
-  period: '/month',
-  highlight: true,
-  badge: 'Most Popular',
-  tagline: 'For serious builders and small teams',
-  credits: '250 credits / month',
-  cta: 'Upgrade to Pro',
-  features: [
-    'Advanced AI transformations',
-    'Priority processing and support',
-    'Share credits with teammates',
-  ],
-}
-
+  {
+    id: "pro-monthly",
+    name: "Pro",
+    price: "₹99",
+    period: "/month",
+    highlight: true,
+    badge: "Most Popular",
+    tagline: "For serious builders and small teams",
+    credits: "250 credits / month",
+    cta: "Upgrade to Pro",
+    features: [
+      "Advanced AI transformations",
+      "Priority processing and support",
+      "Share credits with teammates",
+    ],
+  },
 ];
 
 const Pricing = () => {
@@ -148,24 +111,19 @@ const Pricing = () => {
               ))}
             </ul>
 
-            <button
-              type="button"
-              onClick={() => {
-                if (plan.id === "pro-monthly") {
-                  handleUpgrade();
-                }
-              }}
-              disabled={plan.id !== "pro-monthly"}
-              className={`mt-5 inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-xs font-semibold transition ${
-                plan.highlight
-                  ? "bg-gradient-to-r from-orange-500 to-orange-600 text-black shadow-glow hover:brightness-110"
-                  : "border border-white/12 bg-black/60 text-zinc-100 hover:border-orange-500/60 hover:text-orange-200"
-              } ${
-                plan.id !== "pro-monthly" ? "cursor-not-allowed opacity-60" : ""
-              }`}
-            >
-              {plan.cta}
-            </button>
+            {/* 🔥 BUTTON AREA */}
+            {plan.id === "pro-monthly" ? (
+              <div className="mt-5 w-full flex justify-center">
+                <RazorpaySubscriptionButton />
+              </div>
+            ) : (
+              <button
+                disabled
+                className="mt-5 inline-flex w-full cursor-not-allowed items-center justify-center rounded-full border border-white/12 bg-black/60 px-4 py-2 text-xs font-semibold text-zinc-100 opacity-60"
+              >
+                {plan.cta}
+              </button>
+            )}
           </div>
         ))}
       </div>

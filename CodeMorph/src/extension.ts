@@ -9,9 +9,7 @@ let isConversionRunning = false;
 let extensionContext: vscode.ExtensionContext;
 let outputChannel: vscode.OutputChannel;
 let accountProvider: AccountViewProvider;
-
-
-
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 export function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
@@ -20,56 +18,62 @@ export function activate(context: vscode.ExtensionContext) {
   outputChannel.show(true);
   context.subscriptions.push(outputChannel);
 
+  console.log("DEBUG: Activating CodeMorph extension");
+
   // ───────────── Account View ─────────────
   accountProvider = new AccountViewProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
       AccountViewProvider.viewType,
       accountProvider
-    )   
+    )
   );
-
-  console.log("PROVIDER REGISTERED")
+  console.log("DEBUG: AccountViewProvider registered");
 
   // ───────────── Logout Command ─────────────
   context.subscriptions.push(
     vscode.commands.registerCommand("codemorph.logout", async () => {
+      console.log("DEBUG: Logout command triggered");
       await context.secrets.delete("codemorph_token");
       vscode.window.showInformationMessage("Logged out of CodeMorph");
+      accountProvider?.refresh();
     })
   );
 
   // ───────────── Login Redirect Handler ─────────────
   context.subscriptions.push(
-  vscode.window.registerUriHandler({
-    async handleUri(uri) {
-      const params = new URLSearchParams(uri.query);
-      let token = params.get("token");
+    vscode.window.registerUriHandler({
+      async handleUri(uri) {
+        console.log("DEBUG: URI handler called with:", uri.toString());
+        const params = new URLSearchParams(uri.query);
+        let token = params.get("token");
 
-      if (!token) {
-        vscode.window.showErrorMessage("CodeMorph login failed.");
-        return;
-      }
+        if (!token) {
+          vscode.window.showErrorMessage("CodeMorph login failed.");
+          console.error("DEBUG: No token found in URI");
+          return;
+        }
 
-      token = decodeURIComponent(token);
+        token = decodeURIComponent(token);
+        console.log("DEBUG: Token from URI:", token);
 
-      await context.secrets.store("codemorph_token", token);
+        await context.secrets.store("codemorph_token", token);
+        console.log("DEBUG: Token stored in VS Code secrets");
 
-      vscode.window.showInformationMessage(
-        "Logged into CodeMorph successfully."
-      );
+        vscode.window.showInformationMessage(
+          "Logged into CodeMorph successfully."
+        );
 
-      // 🔥 THIS IS THE FIX
-      console.log("URI HANDLER LOGIN");
-      accountProvider?.refresh();
-    },
-  })
-);
-
+        console.log("DEBUG: Refreshing AccountViewProvider after login");
+        accountProvider?.refresh();
+      },
+    })
+  );
 
   // ───────────── Activation Command ─────────────
   context.subscriptions.push(
     vscode.commands.registerCommand("codemorph.start", () => {
+      console.log("DEBUG: CodeMorph start command executed");
       vscode.window.showInformationMessage("CodeMorph Activated");
     })
   );
@@ -77,8 +81,12 @@ export function activate(context: vscode.ExtensionContext) {
   // ───────────── File Rename Listener ─────────────
   context.subscriptions.push(
     vscode.workspace.onDidRenameFiles(async (event) => {
+      console.log("DEBUG: onDidRenameFiles event triggered", event.files);
       const loggedIn = await ensureLoggedIn();
-      if (!loggedIn) return;
+      if (!loggedIn) {
+        console.log("DEBUG: User not logged in. Conversion aborted.");
+        return;
+      }
 
       for (const file of event.files) {
         if (
@@ -110,11 +118,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-  
-  
-  console.log("🔥 CodeMorph activated");
 
-
+  console.log("DEBUG: CodeMorph extension activated");
 }
 
 // ───────────── Helpers ─────────────
@@ -132,7 +137,9 @@ function isSupportedConversion(fromExt: string, toExt: string): boolean {
 }
 
 async function getAuthToken(): Promise<string | undefined> {
-  return extensionContext.secrets.get("codemorph_token");
+  const token = await extensionContext.secrets.get("codemorph_token");
+  console.log("DEBUG: getAuthToken token:", token);
+  return token;
 }
 
 async function ensureLoggedIn(): Promise<boolean> {
@@ -146,6 +153,7 @@ async function ensureLoggedIn(): Promise<boolean> {
   );
 
   if (choice === "Login") {
+    console.log("DEBUG: Opening login URL in browser");
     vscode.env.openExternal(vscode.Uri.parse(WEBSITE_URL));
   }
 
@@ -153,7 +161,6 @@ async function ensureLoggedIn(): Promise<boolean> {
 }
 
 // ───────────── Conversion Logic ─────────────
-
 async function handleConversion(
   fileUri: vscode.Uri,
   fromLang: Language,
@@ -170,6 +177,8 @@ async function handleConversion(
   isConversionRunning = true;
 
   try {
+    console.log("DEBUG: Starting conversion for file:", fileUri.fsPath);
+
     const bytes = await vscode.workspace.fs.readFile(fileUri);
     const sourceCode = Buffer.from(bytes).toString("utf8");
 
@@ -225,8 +234,10 @@ async function handleConversion(
     await vscode.workspace.applyEdit(edit);
 
     vscode.window.showInformationMessage("Conversion applied successfully!");
+    console.log("DEBUG: Conversion applied successfully");
   } catch (e: any) {
     vscode.window.showErrorMessage(`Conversion failed: ${e.message}`);
+    console.error("DEBUG: Conversion error:", e);
   } finally {
     isConversionRunning = false;
   }
@@ -243,6 +254,7 @@ async function convertWithAI(
   if (!authToken) throw new Error("Login required.");
 
   const backendUrl = CONVERT_API_URL;
+  console.log("DEBUG: Converting with AI. Backend URL:", backendUrl);
 
   const javaHint =
     to === "java" && fileName
@@ -271,6 +283,7 @@ ${code}
   });
 
   const rawText = await res.text();
+  console.log("DEBUG: Raw conversion response:", rawText);
 
   let parsed: any;
   try {
@@ -289,9 +302,7 @@ ${code}
       );
 
       if (choice === "Yes") {
-        vscode.env.openExternal(
-          vscode.Uri.parse(`${WEBSITE_URL}/payments`)
-        );
+        vscode.env.openExternal(vscode.Uri.parse(`${WEBSITE_URL}/payments`));
       }
 
       throw new Error("Insufficient credits");
@@ -307,10 +318,9 @@ function stripMarkdown(code: string): string {
   const fenced = code.match(/```[\s\S]*?```/);
   if (!fenced) return code.trim();
 
-  return fenced[0]
-    .replace(/```[a-zA-Z0-9]*/g, "")
-    .replace(/```/g, "")
-    .trim();
+  return fenced[0].replace(/```[a-zA-Z0-9]*/g, "").replace(/```/g, "").trim();
 }
 
-export function deactivate() { }
+export function deactivate() {
+  console.log("DEBUG: CodeMorph extension deactivated");
+}
