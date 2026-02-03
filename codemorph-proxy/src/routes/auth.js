@@ -2,7 +2,7 @@ import express from "express";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { pool } from "../db.js";
-import { signJwt } from "../auth.js";
+import { apiKeyMiddleware, signJwt } from "../auth.js";
 import { Resend } from "resend";
 
 const router = express.Router();
@@ -79,7 +79,7 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-router.get("/me", authMiddleware, async (req, res) => {
+router.get("/me", apiKeyMiddleware, async (req, res) => {
   res.json({
     name: req.user.name,
     email: req.user.email,
