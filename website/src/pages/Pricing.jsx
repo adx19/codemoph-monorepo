@@ -1,7 +1,7 @@
 import React from "react";
 import { ArrowLeft, Check, Crown, Sparkles } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import RazorpaySubscriptionButton from "../components/RazorpaySubscriptionButton"; // ✅ NEW
+import { useNavigate } from "react-router-dom"; // ✅ NEW
+import RazorpaySubscriptionButton from "./RazorpaySubscriptionButton";
 
 const plans = [
   {
