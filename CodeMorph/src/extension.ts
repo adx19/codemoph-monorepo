@@ -1,55 +1,85 @@
 import * as vscode from "vscode";
+import { AccountViewProvider } from "./AccountViewProvider";
+import { CONVERT_API_URL, WEBSITE_URL } from "./config";
+
 import { EXTENSION_LANGUAGE_MAP, Language } from "./languages";
 import { ALLOWED_CONVERSIONS } from "./conversions";
 
 let isConversionRunning = false;
 let extensionContext: vscode.ExtensionContext;
 let outputChannel: vscode.OutputChannel;
+let accountProvider: AccountViewProvider;
 
-const fetch = async (url: string, options?: any) => {
-  const mod = await import("node-fetch");
-  return mod.default(url, options);
-};
+
+
 
 export function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
+
   outputChannel = vscode.window.createOutputChannel("CodeMorph");
   outputChannel.show(true);
   context.subscriptions.push(outputChannel);
 
+  // ───────────── Account View ─────────────
+  accountProvider = new AccountViewProvider(context);
   context.subscriptions.push(
-    vscode.window.registerUriHandler({
-      async handleUri(uri) {
-        const params = new URLSearchParams(uri.query);
-        let token = params.get("token");
+    vscode.window.registerWebviewViewProvider(
+      AccountViewProvider.viewType,
+      accountProvider
+    )   
+  );
 
-        if (!token) {
-          vscode.window.showErrorMessage("CodeMorph login failed.");
-          return;
-        }
+  console.log("PROVIDER REGISTERED")
 
-        try {
-          token = decodeURIComponent(token);
-        } catch {}
-
-        await context.secrets.store("codemorph_token", token);
-        vscode.window.showInformationMessage(
-          "Logged into CodeMorph successfully."
-        );
-      },
+  // ───────────── Logout Command ─────────────
+  context.subscriptions.push(
+    vscode.commands.registerCommand("codemorph.logout", async () => {
+      await context.secrets.delete("codemorph_token");
+      vscode.window.showInformationMessage("Logged out of CodeMorph");
     })
   );
 
+  // ───────────── Login Redirect Handler ─────────────
+  context.subscriptions.push(
+  vscode.window.registerUriHandler({
+    async handleUri(uri) {
+      const params = new URLSearchParams(uri.query);
+      let token = params.get("token");
+
+      if (!token) {
+        vscode.window.showErrorMessage("CodeMorph login failed.");
+        return;
+      }
+
+      token = decodeURIComponent(token);
+
+      await context.secrets.store("codemorph_token", token);
+
+      vscode.window.showInformationMessage(
+        "Logged into CodeMorph successfully."
+      );
+
+      // 🔥 THIS IS THE FIX
+      console.log("URI HANDLER LOGIN");
+      accountProvider?.refresh();
+    },
+  })
+);
+
+
+  // ───────────── Activation Command ─────────────
   context.subscriptions.push(
     vscode.commands.registerCommand("codemorph.start", () => {
       vscode.window.showInformationMessage("CodeMorph Activated");
     })
   );
 
+  // ───────────── File Rename Listener ─────────────
   context.subscriptions.push(
     vscode.workspace.onDidRenameFiles(async (event) => {
       const loggedIn = await ensureLoggedIn();
       if (!loggedIn) return;
+
       for (const file of event.files) {
         if (
           file.newUri.fsPath.endsWith(".git") ||
@@ -80,7 +110,14 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+  
+  
+  console.log("🔥 CodeMorph activated");
+
+
 }
+
+// ───────────── Helpers ─────────────
 
 function getExtension(uri: vscode.Uri): string | null {
   const parts = uri.path.split(".");
@@ -95,7 +132,7 @@ function isSupportedConversion(fromExt: string, toExt: string): boolean {
 }
 
 async function getAuthToken(): Promise<string | undefined> {
-  return await extensionContext.secrets.get("codemorph_token");
+  return extensionContext.secrets.get("codemorph_token");
 }
 
 async function ensureLoggedIn(): Promise<boolean> {
@@ -109,18 +146,19 @@ async function ensureLoggedIn(): Promise<boolean> {
   );
 
   if (choice === "Login") {
-    vscode.env.openExternal(vscode.Uri.parse("https://www.codemorph.me"));
+    vscode.env.openExternal(vscode.Uri.parse(WEBSITE_URL));
   }
 
   return false;
 }
+
+// ───────────── Conversion Logic ─────────────
 
 async function handleConversion(
   fileUri: vscode.Uri,
   fromLang: Language,
   toLang: Language
 ) {
-  // ✅ HARD LOGIN ENFORCEMENT
   const loggedIn = await ensureLoggedIn();
   if (!loggedIn) return;
 
@@ -155,10 +193,7 @@ async function handleConversion(
     if (!addComments) return;
 
     const fileName =
-      fileUri.path
-        .split("/")
-        .pop()
-        ?.replace(/\.[^/.]+$/, "") || "Main";
+      fileUri.path.split("/").pop()?.replace(/\.[^/.]+$/, "") || "Main";
 
     const converted = await vscode.window.withProgress(
       {
@@ -166,8 +201,8 @@ async function handleConversion(
         title: "Converting...",
         cancellable: false,
       },
-      async () =>
-        await convertWithAI(
+      () =>
+        convertWithAI(
           sourceCode,
           fromLang,
           toLang,
@@ -205,11 +240,9 @@ async function convertWithAI(
   fileName?: string
 ): Promise<string> {
   const authToken = await getAuthToken();
-  const backendUrl = "https://codemorph-tbgv.onrender.com";
+  if (!authToken) throw new Error("Login required.");
 
-  if (!authToken) {
-    throw new Error("Login required.");
-  }
+  const backendUrl = CONVERT_API_URL;
 
   const javaHint =
     to === "java" && fileName
@@ -221,11 +254,7 @@ If the source code already defines a class, preserve it and do not introduce an 
   const prompt = `
 ${javaHint}
 Convert the following ${from} code to ${to}.
-${
-  withComments
-    ? "Add comments which are necessary. Do not add unnecessary comments."
-    : "Do NOT add comments."
-}
+${withComments ? "Add comments only where necessary." : "Do NOT add comments."}
 Return ONLY valid ${to} code.
 
 CODE:
@@ -238,11 +267,7 @@ ${code}
       "Content-Type": "application/json",
       Authorization: `Bearer ${authToken}`,
     },
-    body: JSON.stringify({
-      prompt,
-      fromLang: from,
-      toLang: to,
-    }),
+    body: JSON.stringify({ prompt, fromLang: from, toLang: to }),
   });
 
   const rawText = await res.text();
@@ -257,7 +282,7 @@ ${code}
   if (!parsed.reply) {
     if (parsed.error === "insufficient_credits") {
       const choice = await vscode.window.showInformationMessage(
-        "You have insufficient credit balance. Do you want to purchase more credits?",
+        "You have insufficient credits. Purchase more?",
         { modal: true },
         "Yes",
         "No"
@@ -265,7 +290,7 @@ ${code}
 
       if (choice === "Yes") {
         vscode.env.openExternal(
-          vscode.Uri.parse("https://www.codemorph.me/payments")
+          vscode.Uri.parse(`${WEBSITE_URL}/payments`)
         );
       }
 
@@ -280,15 +305,12 @@ ${code}
 
 function stripMarkdown(code: string): string {
   const fenced = code.match(/```[\s\S]*?```/);
+  if (!fenced) return code.trim();
 
-  if (fenced) {
-    return fenced[0]
-      .replace(/```[a-zA-Z0-9]*/g, "")
-      .replace(/```/g, "")
-      .trim();
-  }
-
-  return code.trim();
+  return fenced[0]
+    .replace(/```[a-zA-Z0-9]*/g, "")
+    .replace(/```/g, "")
+    .trim();
 }
 
-export function deactivate() {}
+export function deactivate() { }
