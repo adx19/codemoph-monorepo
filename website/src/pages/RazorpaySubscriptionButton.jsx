@@ -2,15 +2,16 @@ import { useEffect, useRef } from "react";
 
 /**
  * Razorpay Subscription Button Component
- * Injects Razorpay's official subscription widget safely into React
+ * MUST be inside <form> tag (Razorpay requirement)
  */
 const RazorpaySubscriptionButton = () => {
-  const containerRef = useRef(null);
+  const formRef = useRef(null);
 
   useEffect(() => {
+    if (!formRef.current) return;
+
     // Prevent duplicate injection
-    if (!containerRef.current) return;
-    if (containerRef.current.children.length > 0) return;
+    if (formRef.current.children.length > 0) return;
 
     const script = document.createElement("script");
     script.src = "https://cdn.razorpay.com/static/widget/subscription-button.js";
@@ -20,12 +21,12 @@ const RazorpaySubscriptionButton = () => {
     script.setAttribute("data-subscription_button_id", "pl_SBkpFMurIhTVJ7");
     script.setAttribute("data-button_theme", "rzp-dark-standard");
 
-    containerRef.current.appendChild(script);
+    formRef.current.appendChild(script);
   }, []);
 
   return (
-    <div
-      ref={containerRef}
+    <form
+      ref={formRef}
       className="w-full flex justify-center items-center"
     />
   );
