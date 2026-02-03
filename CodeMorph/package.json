@@ -12,8 +12,7 @@
     "Other"
   ],
   "activationEvents": [
-   
-     "*"
+    "*"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -31,7 +30,7 @@
         {
           "id": "codemorph.accountView",
           "name": "Account",
-          "type" : "webview"
+          "type": "webview"
         }
       ]
     },
@@ -39,6 +38,13 @@
       {
         "command": "codemorph.start",
         "title": "CodeMorph: Activate Extension"
+      }
+    ],
+    "authentication": [
+      {
+        "id": "rapidapi",
+        "label": "RapidAPI",
+        "supportsMultipleAccounts": false
       }
     ]
   },
