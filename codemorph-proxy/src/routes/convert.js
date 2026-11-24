@@ -103,6 +103,7 @@ router.post("/", jwtMiddleware, async (req, res) => {
   }
 
   const conn = await pool.connect();
+  let releaseErr;
 
   try {
     await conn.query("BEGIN");
@@ -200,12 +201,16 @@ router.post("/", jwtMiddleware, async (req, res) => {
     }
 
     await conn.query("COMMIT");
-    conn.release();
 
     return res.json({ reply });
   } catch (err) {
-    await conn.query("ROLLBACK");
-    conn.release();
+    try {
+      await conn.query("ROLLBACK");
+    } catch (rollbackErr) {
+      console.error("Credit deduction rollback failed:", rollbackErr);
+      // Have the pool discard this connection instead of reusing it.
+      releaseErr = rollbackErr;
+    }
 
     if (err.message === "NO_CREDITS") {
       return res.status(402).json({ message: "insufficient_credits" });
@@ -217,6 +222,8 @@ router.post("/", jwtMiddleware, async (req, res) => {
       message: "convert_failed_after_successful_ai",
       debug: err.message || String(err),
     });
+  } finally {
+    conn.release(releaseErr);
   }
 });
 

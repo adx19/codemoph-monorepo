@@ -108,7 +108,7 @@ router.post("/", jwtMiddleware, async (req, res) => {
     }
 
     if (sharedUser.id === ownerUserId) {
-      return res.status(400).json({ message: "cannot_share_to_self" });
+      throw new Error("SHARE_TO_SELF");
     }
 
     // 3️⃣ Insert share
@@ -155,6 +155,10 @@ router.post("/", jwtMiddleware, async (req, res) => {
 
     if (err.message === "NOT_PAID") {
       return res.status(403).json({ message: "upgrade_required" });
+    }
+
+    if (err.message === "SHARE_TO_SELF") {
+      return res.status(400).json({ message: "cannot_share_to_self" });
     }
 
     if (err.message === "USER_NOT_FOUND") {
