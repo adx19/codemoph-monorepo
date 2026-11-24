@@ -2,6 +2,8 @@
 
 A React 18 + Vite + Tailwind CSS frontend for the **CodeMorph** VS Code extension.
 
+> **Project status:** CodeMorph is no longer running. The live site (`www.codemorph.me`) and its hosted API are offline, and the project has been retired. The code is kept as a reference. You can run it locally against a local proxy; see the [root README](../README.md#project-status).
+
 ## Tech Stack
 
 - React 18
@@ -15,7 +17,7 @@ A React 18 + Vite + Tailwind CSS frontend for the **CodeMorph** VS Code extensio
 ## Prerequisites
 
 - **Node.js** 18+ installed
-- (Optional) A backend API running at `http://localhost:3001/api` or configure `VITE_API_URL`.
+- The CodeMorph proxy (`../codemorph-proxy`) running locally. The app reads its URL from `VITE_BACKEND_URL`.
 
 ## Setup & Run
 
@@ -27,13 +29,13 @@ A React 18 + Vite + Tailwind CSS frontend for the **CodeMorph** VS Code extensio
 
 2. **(Optional) Configure API base URL**
 
-   Create a `.env` file in the project root if you have a backend:
+   Create a `.env` file in the `website/` folder that points at your local proxy (the proxy listens on port 3000 by default):
 
    ```bash
-   echo VITE_API_URL=http://localhost:3001/api >> .env
+   echo VITE_BACKEND_URL=http://localhost:3000 >> .env
    ```
 
-   If you skip this, the app will default to `http://localhost:3001/api`.
+   If you skip this, the app defaults to `http://localhost:5000` (see `src/api/apiConfig.js`).
 
 3. **Start the dev server**
 

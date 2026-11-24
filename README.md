@@ -2,7 +2,17 @@
 
 CodeMorph converts source code between programming languages with Claude. You rename a file's extension (for example `.py` to `.java`) in VS Code, and the extension rewrites the file in the new language.
 
-> **Status:** the hosted backend has been shut down. The URLs in the code (the Render API URL in `CodeMorph/src/config.ts` and `codemorph.me`) no longer serve the app. To run CodeMorph end to end, run the proxy locally and point the website (and, if you need it, the extension) at it.
+## Project status
+
+**CodeMorph is no longer running.** The project has been retired:
+
+- **Backend shut down:** the API was hosted on Render's free tier, and it was shut down when the free tier ended.
+- **No AI credits:** the Claude API credits that powered conversions ran out.
+- **No users:** the project had no active users.
+
+The code is kept here as a reference. You can still run all of it locally with your own keys (PostgreSQL, Anthropic, and optionally Razorpay, Resend and OAuth apps). See [Local setup](#local-setup).
+
+> **Dead URLs:** the live site (`www.codemorph.me`) and the hosted API (`codemorph-tbgv.onrender.com`) are offline. Both are still hard-coded in `CodeMorph/src/config.ts`, and the API URL is also a fallback in `website/src/api/authApi.js`. Requests to them will fail, so don't follow them.
 
 ## What's in this repo
 
@@ -67,6 +77,8 @@ Environment variables (in `website/.env`):
 | Variable | Purpose |
 | --- | --- |
 | `VITE_BACKEND_URL` | Base URL of the proxy API (default `http://localhost:5000`) |
+
+The website defaults to port 5000 and the proxy defaults to port 3000. Set `VITE_BACKEND_URL=http://localhost:3000`, or run the proxy with `PORT=5000`.
 
 ### CodeMorph (VS Code extension)
 

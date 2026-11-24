@@ -5,18 +5,11 @@ CodeMorph is a VS Code extension that converts code between languages automatica
 
 ---
 
-## 🚧 Project Status
+## Project Status
 
-CodeMorph is currently in **early testing (pre-release)**.
+**CodeMorph is no longer running.** Its hosted backend was shut down, the Claude API credits ran out, and the project had no active users, so it was retired. The code is kept as a reference.
 
-The core conversion workflow is functional, but we are actively testing and improving:
-
-- conversion accuracy
-- edge cases
-- UX clarity
-- performance
-
-Bugs, imperfect output, and rough edges are expected at this stage — and helpful 🙂
+The extension's built-in URLs in `src/config.ts` (`www.codemorph.me` and `codemorph-tbgv.onrender.com`) are offline, so sign-in and conversion will fail as shipped. To run it, start the proxy locally and point those constants at it. See the [Project status and local setup in the root README](../README.md#project-status).
 
 ---
 
