@@ -17,15 +17,29 @@ router.post(
   async (req, res) => {
 
     console.log("🔥 RAZORPAY WEBHOOK HIT");
+    const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+    if (!webhookSecret) {
+      console.error("❌ Razorpay webhook: RAZORPAY_WEBHOOK_SECRET is not set");
+      return res.status(500).json({ ok: false });
+    }
+
     const signature = req.headers["x-razorpay-signature"];
     const body = req.body;
 
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_WEBHOOK_SECRET)
-      .update(body)
-      .digest("hex");
+    const expectedBuf = Buffer.from(
+      crypto.createHmac("sha256", webhookSecret).update(body).digest("hex"),
+      "utf8"
+    );
+    const receivedBuf = Buffer.from(
+      typeof signature === "string" ? signature : "",
+      "utf8"
+    );
 
-    if (expectedSignature !== signature) {
+    // timingSafeEqual throws on unequal lengths, so check length first.
+    if (
+      receivedBuf.length !== expectedBuf.length ||
+      !crypto.timingSafeEqual(receivedBuf, expectedBuf)
+    ) {
       console.error("❌ Razorpay webhook: invalid signature");
       return res.status(400).send("invalid signature");
     }
@@ -41,7 +55,14 @@ router.post(
     const orderId = payment.order_id;
 
     // 🔥 CRITICAL FIX: fetch order
-    const order = await razorpay.orders.fetch(orderId);
+    let order;
+    try {
+      order = await razorpay.orders.fetch(orderId);
+    } catch (err) {
+      // 500 makes Razorpay retry the webhook later.
+      console.error("❌ Razorpay webhook: failed to fetch order", orderId, err);
+      return res.status(500).json({ ok: false });
+    }
 
     const userId = order.notes?.userId;
     const creditsToAdd = Number(order.notes?.credits);
