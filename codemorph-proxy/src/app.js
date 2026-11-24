@@ -25,8 +25,28 @@ const convertLimiter = rateLimit({
   max: 5,
   message: { message: "too_many_requests" }
 });
+// Brute-force protection for credential endpoints: 10 requests per 15
+// minutes per IP, counted separately for login and signup.
+const createAuthLimiter = () =>
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: { message: "too_many_requests" },
+  });
+
+// Only the website may make cross-origin browser requests. The VS Code
+// extension calls the API from Node, which sends no Origin header, so CORS
+// does not affect it. If FRONTEND_URL is unset, deny cross-origin requests
+// rather than falling back to cors()'s default of "*".
+const corsOrigin = process.env.FRONTEND_URL || false;
+if (!corsOrigin) {
+  console.warn("FRONTEND_URL is not set; cross-origin requests will be rejected");
+}
+
 const app = express();
-app.use(cors());
+app.use(cors({ origin: corsOrigin }));
 app.set("trust proxy", 1);
 app.use("/webhooks", webhooks);
 app.use(express.json({ limit: "100kb" }));
@@ -35,6 +55,8 @@ app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
 
 /* ✅ AUTH (local + OAuth) */
+app.use("/auth/login", createAuthLimiter());
+app.use("/auth/signup", createAuthLimiter());
 app.use("/auth", authRoutes);
 app.use("/auth", googleOAuthRoutes);
 app.use("/auth/github", githubOAuthRoutes);

@@ -39,7 +39,7 @@ Environment variables (in `codemorph-proxy/.env`):
 | `ADMIN_TOKEN` | Token for the `x-admin-token` header on `/admin` routes |
 | `ANTHROPIC_API_KEY` | Claude API key used for conversions |
 | `CLAUDE_MODEL` | Claude model ID used for conversions (optional; has a default in `src/utils/claude.js`) |
-| `FRONTEND_URL` | Website origin, used for redirects after email verification and OAuth |
+| `FRONTEND_URL` | Website origin. Used for redirects after email verification and OAuth, and as the only allowed CORS origin |
 | `BACKEND_URL` | Public URL of this API, used in verification email links |
 | `RESEND_API_KEY` | Resend API key for verification emails |
 | `EMAIL_FROM` | Sender address for verification emails |
