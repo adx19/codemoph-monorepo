@@ -1,5 +1,8 @@
-import dotenv from "dotenv";
-dotenv.config({ path: ".env" });
+// Must be the first import. ES module imports are evaluated before this
+// file's body runs, so .env has to be loaded by an import, not by a later
+// dotenv.config() call, or modules that read process.env at load time
+// (auth.js, admin.js, webhooks.js) see it unset.
+import "dotenv/config";
 
 import express from "express";
 import bodyParser from "body-parser";
