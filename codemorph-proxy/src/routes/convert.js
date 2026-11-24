@@ -50,6 +50,42 @@ router.post("/", apiKeyMiddleware, async (req, res) => {
     }
   }
 
+  // Read-only pre-check so a user with no credits gets 402 without costing
+  // an AI call. It mirrors the three sources the deduction below uses; the
+  // locked, transactional deduction after the reply is still authoritative.
+  const creditCheck = await pool.query(
+    `
+    SELECT
+      EXISTS (
+        SELECT 1
+        FROM purchased_credits
+        WHERE user_id = $1
+          AND paid_credits > 0
+          AND end_date > NOW()
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM shared_credits sc
+        JOIN purchased_credits pc ON pc.user_id = sc.owner_user_id
+        WHERE sc.shared_user_id = $1
+          AND sc.end_date > NOW()
+          AND pc.paid_credits > 0
+          AND pc.end_date > NOW()
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM users
+        WHERE id = $1
+          AND credits > 0
+      ) AS has_credits
+    `,
+    [userId]
+  );
+
+  if (!creditCheck.rows[0]?.has_credits) {
+    return res.status(402).json({ message: "insufficient_credits" });
+  }
+
   let reply;
 
   try {
