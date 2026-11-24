@@ -1,7 +1,7 @@
 import express from "express";
 import { pool } from "../db.js";
 import { generateResponse } from "../utils/claude.js";
-import { apiKeyMiddleware } from "../auth.js";
+import { jwtMiddleware } from "../auth.js";
 import crypto from "crypto";
 
 const router = express.Router();
@@ -15,7 +15,7 @@ const FREE_LANGUAGES = [
   "typescript",
 ];
 
-router.post("/", apiKeyMiddleware, async (req, res) => {
+router.post("/", jwtMiddleware, async (req, res) => {
   const userId = req.user.id;
   const { prompt, fromLang, toLang } = req.body;
 

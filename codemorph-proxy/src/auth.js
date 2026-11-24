@@ -4,6 +4,10 @@ import { pool } from './db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not set; refusing to start");
+}
+
 export function signJwt(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
 }
@@ -24,9 +28,4 @@ export async function jwtMiddleware(req, res, next) {
   } catch (err) {
     return res.status(401).json({ message: 'Invalid token' });
   }
-}
-
-// API-key middleware (x-api-key)
-export function apiKeyMiddleware(req, res, next) {
-  return jwtMiddleware(req, res, next);
 }

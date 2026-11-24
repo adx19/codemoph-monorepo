@@ -1,10 +1,10 @@
 import express from "express";
 import { pool } from "../db.js";
-import { apiKeyMiddleware } from "../auth.js";
+import { jwtMiddleware } from "../auth.js";
 
 const router = express.Router();
 
-router.get("/summary", apiKeyMiddleware, async (req, res) => {
+router.get("/summary", jwtMiddleware, async (req, res) => {
   const userId = req.user.id;
   const conn = await pool.connect();
 

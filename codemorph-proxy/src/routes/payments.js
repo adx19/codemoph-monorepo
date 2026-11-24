@@ -2,7 +2,7 @@ import express from "express";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import { pool } from "../db.js";
-import { apiKeyMiddleware } from "../auth.js";
+import { jwtMiddleware } from "../auth.js";
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ const razorpay = new Razorpay({
  * - Creates Razorpay order
  * - Attaches userId + credits in notes
  */
-router.post("/create-order", apiKeyMiddleware, async (req, res) => {
+router.post("/create-order", jwtMiddleware, async (req, res) => {
   const userId = req.user.id;
 
   const amount = 99;   // INR
@@ -45,7 +45,7 @@ router.post("/create-order", apiKeyMiddleware, async (req, res) => {
  * - NO DB writes here
  * - Webhook is the source of truth
  */
-router.post("/verify", apiKeyMiddleware, async (req, res) => {
+router.post("/verify", jwtMiddleware, async (req, res) => {
   const {
     razorpay_payment_id,
     razorpay_order_id,
@@ -70,7 +70,7 @@ router.post("/verify", apiKeyMiddleware, async (req, res) => {
 /**
  * PAYMENT HISTORY (READ ONLY)
  */
-router.get("/", apiKeyMiddleware, async (req, res) => {
+router.get("/", jwtMiddleware, async (req, res) => {
   const userId = req.user.id;
 
   const { rows: purchases } = await pool.query(

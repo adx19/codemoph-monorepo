@@ -1,6 +1,6 @@
 import express from "express";
 import { pool } from "../db.js";
-import { apiKeyMiddleware } from "../auth.js";
+import { jwtMiddleware } from "../auth.js";
 import crypto from "crypto";
 
 const router = express.Router();
@@ -8,7 +8,7 @@ const router = express.Router();
 /**
  * ✅ GET — Credits I SHARED to others
  */
-router.get("/sent", apiKeyMiddleware, async (req, res) => {
+router.get("/sent", jwtMiddleware, async (req, res) => {
   const userId = req.user.id;
 
   const { rows } = await pool.query(
@@ -33,7 +33,7 @@ router.get("/sent", apiKeyMiddleware, async (req, res) => {
 /**
  * ✅ GET — Credits SHARED TO ME
  */
-router.get("/received", apiKeyMiddleware, async (req, res) => {
+router.get("/received", jwtMiddleware, async (req, res) => {
   const userId = req.user.id;
 
   const { rows } = await pool.query(
@@ -65,7 +65,7 @@ router.get("/received", apiKeyMiddleware, async (req, res) => {
  * ✅ POST — Share credits
  * body: { email }
  */
-router.post("/", apiKeyMiddleware, async (req, res) => {
+router.post("/", jwtMiddleware, async (req, res) => {
   const ownerUserId = req.user.id;
   const { email } = req.body;
 
